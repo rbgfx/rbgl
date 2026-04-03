@@ -29,6 +29,23 @@ module RBGL
           @socket.flush
         end
 
+        def atom(name)
+          @atom_cache ||= {
+            wm_name: 39,
+            string: 31,
+            atom: 4
+          }
+          @atom_cache[name] ||= resolve_atom(name)
+        end
+
+        def wm_delete_window_atom
+          atom(:wm_delete_window)
+        end
+
+        def enable_wm_delete_window(window)
+          change_property(window, :wm_protocols, :atom, [wm_delete_window_atom], format: 32)
+        end
+
         def pending
           ready = IO.select([@socket], nil, nil, 0)
           ready ? 1 : 0
@@ -131,7 +148,7 @@ module RBGL
           send_request_with_data(72, format_byte, header, data)
         end
 
-        def change_property(window, property, type, data, mode: :replace)
+        def change_property(window, property, type, data, mode: :replace, format: 8)
           mode_val = case mode
                      when :replace then 0
                      when :prepend then 1
@@ -139,18 +156,16 @@ module RBGL
                      else 0
                      end
 
-          property_atom = get_atom(property)
-          type_atom = get_atom(type)
-
-          format = 8
-          data_bytes = data.to_s
+          property_atom = atom(property)
+          type_atom = atom(type)
+          data_bytes, value_count = pack_property_data(data, format)
 
           request = [
             window,
             property_atom,
             type_atom,
             format,
-            data_bytes.bytesize
+            value_count
           ].pack("VVVCV") + "\x00\x00\x00" + pad_to_4(data_bytes)
 
           send_request(18, request, mode_val)
@@ -188,8 +203,10 @@ module RBGL
         private
 
         def parse_display_name(name)
-          if name =~ /^(?:(.+):)?(\d+)(?:\.(\d+))?$/
-            [::Regexp.last_match(1), ::Regexp.last_match(2).to_i, (::Regexp.last_match(3) || 0).to_i]
+          if name =~ /^(?:(.*):)?(\d+)(?:\.(\d+))?$/
+            host = ::Regexp.last_match(1)
+            host = nil if host&.empty?
+            [host, ::Regexp.last_match(2).to_i, (::Regexp.last_match(3) || 0).to_i]
           else
             raise "Invalid display name: #{name}"
           end
@@ -319,14 +336,31 @@ module RBGL
           end
         end
 
-        def get_atom(name)
+        def resolve_atom(name)
           case name
           when :wm_name then 39
           when :string then 31
+          when :atom then 4
           when :wm_protocols then intern_atom("WM_PROTOCOLS")
           when :wm_delete_window then intern_atom("WM_DELETE_WINDOW")
           else
             name.is_a?(Integer) ? name : intern_atom(name.to_s)
+          end
+        end
+
+        def pack_property_data(data, format)
+          case format
+          when 8
+            bytes = data.to_s
+            [bytes, bytes.bytesize]
+          when 16
+            values = Array(data)
+            [values.pack("v*"), values.size]
+          when 32
+            values = Array(data)
+            [values.pack("V*"), values.size]
+          else
+            raise ArgumentError, "Unsupported property format: #{format}"
           end
         end
 

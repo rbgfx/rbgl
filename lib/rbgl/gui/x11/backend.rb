@@ -35,6 +35,7 @@ module RBGL
           )
 
           @display.change_property(wid, :wm_name, :string, t)
+          @display.enable_wm_delete_window(wid)
           @display.map_window(wid)
           @display.flush
 
@@ -124,9 +125,9 @@ module RBGL
           when :configure_notify
             Event.new(:resize, width: raw[:width], height: raw[:height])
           when :client_message
-            if @handle && @windows[@handle]
-              @windows[@handle][:should_close] = true
-            end
+            return nil unless raw[:window] == @handle && raw[:data] == @display.wm_delete_window_atom
+
+            @windows[@handle][:should_close] = true if @handle && @windows[@handle]
             Event.new(:close)
           else
             nil
