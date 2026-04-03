@@ -137,20 +137,20 @@ module RBGL
           v0, v1, v2,
           @pipeline.fragment_shader,
           @uniforms,
-          cull_mode: @pipeline.cull_mode
+          **rasterizer_state
         )
       end
 
       def draw_line(v0, v1)
         return unless v0 && v1
 
-        @rasterizer.rasterize_line(v0, v1, @pipeline.fragment_shader, @uniforms)
+        @rasterizer.rasterize_line(v0, v1, @pipeline.fragment_shader, @uniforms, **rasterizer_state)
       end
 
       def draw_point(v)
         return unless v
 
-        @rasterizer.rasterize_point(v, @pipeline.fragment_shader, @uniforms)
+        @rasterizer.rasterize_point(v, @pipeline.fragment_shader, @uniforms, **rasterizer_state)
       end
 
       def clip_triangle?(v0, v1, v2)
@@ -168,6 +168,15 @@ module RBGL
           positions.all? { |p| p.y > 1 } ||
           positions.all? { |p| p.z < -1 } ||
           positions.all? { |p| p.z > 1 }
+      end
+
+      def rasterizer_state
+        {
+          cull_mode: @pipeline.cull_mode,
+          depth_test: @pipeline.depth_test,
+          depth_write: @pipeline.depth_write,
+          blend_mode: @pipeline.blend_mode
+        }
       end
     end
   end

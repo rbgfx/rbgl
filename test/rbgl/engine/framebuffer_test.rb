@@ -93,6 +93,30 @@ class FramebufferTest < Test::Unit::TestCase
     assert_equal blue, @fb.get_pixel(5, 5)
   end
 
+  test "write_pixel can disable depth write" do
+    red = Larb::Color.new(1.0, 0.0, 0.0, 1.0)
+
+    result = @fb.write_pixel(5, 5, red, 0.5, depth_write: false)
+
+    assert_true result
+    assert_equal red, @fb.get_pixel(5, 5)
+    assert_equal Float::INFINITY, @fb.get_depth(5, 5)
+  end
+
+  test "write_pixel can alpha blend with existing color" do
+    red = Larb::Color.new(1.0, 0.0, 0.0, 1.0)
+    blue = Larb::Color.new(0.0, 0.0, 1.0, 0.5)
+
+    @fb.write_pixel(5, 5, red, 0.5)
+    @fb.write_pixel(5, 5, blue, 0.4, blend_mode: :alpha)
+
+    color = @fb.get_pixel(5, 5)
+    assert_in_delta 0.5, color.r, 0.001
+    assert_in_delta 0.0, color.g, 0.001
+    assert_in_delta 0.5, color.b, 0.001
+    assert_in_delta 1.0, color.a, 0.001
+  end
+
   test "write_pixel returns false for out of bounds" do
     red = Larb::Color.new(1.0, 0.0, 0.0, 1.0)
     assert_false @fb.write_pixel(-1, 0, red, 0.5)

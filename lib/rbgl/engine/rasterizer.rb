@@ -10,7 +10,8 @@ module RBGL
         @viewport = { x: 0, y: 0, width: framebuffer.width, height: framebuffer.height }
       end
 
-      def rasterize_triangle(v0, v1, v2, fragment_shader, uniforms, cull_mode: :none)
+      def rasterize_triangle(v0, v1, v2, fragment_shader, uniforms, cull_mode: :none,
+                             depth_test: true, depth_write: true, blend_mode: :none)
         p0 = viewport_transform(v0[:position])
         p1 = viewport_transform(v1[:position])
         p2 = viewport_transform(v2[:position])
@@ -53,13 +54,19 @@ module RBGL
               frag_output = fragment_shader.process(interpolated, uniforms)
               color = frag_output[:color]
 
-              @framebuffer.write_pixel(x, y, color, depth)
+              @framebuffer.write_pixel(
+                x, y, color, depth,
+                depth_test: depth_test,
+                depth_write: depth_write,
+                blend_mode: blend_mode
+              )
             end
           end
         end
       end
 
-      def rasterize_line(v0, v1, fragment_shader, uniforms)
+      def rasterize_line(v0, v1, fragment_shader, uniforms, cull_mode: :none,
+                         depth_test: true, depth_write: true, blend_mode: :none)
         p0 = viewport_transform(v0[:position])
         p1 = viewport_transform(v1[:position])
 
@@ -85,7 +92,12 @@ module RBGL
           interpolated = interpolate_line_attributes(v0, v1, t)
 
           frag_output = fragment_shader.process(interpolated, uniforms)
-          @framebuffer.write_pixel(x0, y0, frag_output[:color], depth)
+          @framebuffer.write_pixel(
+            x0, y0, frag_output[:color], depth,
+            depth_test: depth_test,
+            depth_write: depth_write,
+            blend_mode: blend_mode
+          )
 
           break if x0 == x1 && y0 == y1
 
@@ -101,7 +113,8 @@ module RBGL
         end
       end
 
-      def rasterize_point(vertex, fragment_shader, uniforms, size: 1)
+      def rasterize_point(vertex, fragment_shader, uniforms, cull_mode: :none, size: 1,
+                          depth_test: true, depth_write: true, blend_mode: :none)
         p = viewport_transform(vertex[:position])
         x = p.x.round
         y = p.y.round
@@ -111,7 +124,12 @@ module RBGL
         (-half..half).each do |dy|
           (-half..half).each do |dx|
             frag_output = fragment_shader.process(vertex, uniforms)
-            @framebuffer.write_pixel(x + dx, y + dy, frag_output[:color], depth)
+            @framebuffer.write_pixel(
+              x + dx, y + dy, frag_output[:color], depth,
+              depth_test: depth_test,
+              depth_write: depth_write,
+              blend_mode: blend_mode
+            )
           end
         end
       end

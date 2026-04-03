@@ -36,17 +36,15 @@ module RBGL
         @depth_buffer[y * @width + x] = depth
       end
 
-      def write_pixel(x, y, color, depth, depth_test: true)
+      def write_pixel(x, y, color, depth, depth_test: true, depth_write: true, blend_mode: :none)
         return false if x < 0 || x >= @width || y < 0 || y >= @height
 
         idx = y * @width + x
-        if !depth_test || depth < @depth_buffer[idx]
-          @color_buffer[idx] = color
-          @depth_buffer[idx] = depth
-          true
-        else
-          false
-        end
+        return false if depth_test && depth >= @depth_buffer[idx]
+
+        @color_buffer[idx] = blend_color(@color_buffer[idx], color, blend_mode)
+        @depth_buffer[idx] = depth if depth_write
+        true
       end
 
       def clear(color: Larb::Color.black, depth: Float::INFINITY)
@@ -109,6 +107,24 @@ module RBGL
           i += 4
         end
         bytes.pack("C*")
+      end
+
+      private
+
+      def blend_color(destination, source, blend_mode)
+        case blend_mode
+        when :alpha
+          alpha = source.a
+          inv_alpha = 1.0 - alpha
+          Larb::Color.new(
+            source.r * alpha + destination.r * inv_alpha,
+            source.g * alpha + destination.g * inv_alpha,
+            source.b * alpha + destination.b * inv_alpha,
+            alpha + destination.a * inv_alpha
+          )
+        else
+          source
+        end
       end
     end
   end

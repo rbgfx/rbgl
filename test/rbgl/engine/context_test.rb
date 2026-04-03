@@ -152,6 +152,35 @@ class ContextTest < Test::Unit::TestCase
     assert_true @ctx.send(:clip_triangle?, v0, v1, v2)
   end
 
+  test "draw_arrays respects pipeline depth_test setting" do
+    render_triangle(color: Larb::Color.new(1, 0, 0, 1), z: 0.0)
+    render_triangle(color: Larb::Color.new(0, 0, 1, 1), z: 0.5, depth_test: false)
+
+    color = @ctx.framebuffer.get_pixel(50, 50)
+    assert_in_delta 0.0, color.r, 0.001
+    assert_in_delta 1.0, color.b, 0.001
+  end
+
+  test "draw_arrays respects pipeline depth_write setting" do
+    render_triangle(color: Larb::Color.new(1, 0, 0, 1), z: 0.0, depth_write: false)
+    render_triangle(color: Larb::Color.new(0, 0, 1, 1), z: 0.5)
+
+    color = @ctx.framebuffer.get_pixel(50, 50)
+    assert_in_delta 0.0, color.r, 0.001
+    assert_in_delta 1.0, color.b, 0.001
+    assert_equal 0.75, @ctx.framebuffer.get_depth(50, 50)
+  end
+
+  test "draw_arrays respects pipeline blend mode" do
+    render_triangle(color: Larb::Color.new(1, 0, 0, 1), z: 0.0)
+    render_triangle(color: Larb::Color.new(0, 0, 1, 0.5), z: -0.1, blend_mode: :alpha)
+
+    color = @ctx.framebuffer.get_pixel(50, 50)
+    assert_in_delta 0.5, color.r, 0.001
+    assert_in_delta 0.0, color.g, 0.001
+    assert_in_delta 0.5, color.b, 0.001
+  end
+
   private
 
   def setup_triangle
@@ -190,5 +219,32 @@ class ContextTest < Test::Unit::TestCase
     @ib.add(0, 1, 2, 3)
     @ctx.bind_vertex_buffer(@vb)
     @ctx.bind_index_buffer(@ib)
+  end
+
+  def render_triangle(color:, z:, depth_test: true, depth_write: true, blend_mode: :none)
+    pipeline = RBGL::Engine::Pipeline.create do
+      self.cull_mode = :none
+      self.depth_test = depth_test
+      self.depth_write = depth_write
+      self.blend_mode = blend_mode
+
+      vertex do |input, _uniforms, output|
+        output.position = input[:position]
+        output.color = input[:color]
+      end
+
+      fragment do |input, _uniforms, output|
+        output.color = input[:color]
+      end
+    end
+
+    vb = RBGL::Engine::VertexBuffer.new(@layout)
+    vb.add_vertex(position: Larb::Vec3.new(0, 0.5, z), color: color)
+    vb.add_vertex(position: Larb::Vec3.new(-0.5, -0.5, z), color: color)
+    vb.add_vertex(position: Larb::Vec3.new(0.5, -0.5, z), color: color)
+
+    @ctx.bind_pipeline(pipeline)
+    @ctx.bind_vertex_buffer(vb)
+    @ctx.draw_arrays(:triangles, 0, 3)
   end
 end
