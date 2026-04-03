@@ -125,7 +125,9 @@ module RBGL
           when :configure_notify
             Event.new(:resize, width: raw[:width], height: raw[:height])
           when :client_message
-            return nil unless raw[:window] == @handle && raw[:data] == @display.wm_delete_window_atom
+            return nil unless raw[:window] == @handle
+            return nil unless raw[:message_type] == @display.wm_protocols_atom
+            return nil unless raw[:data32]&.first == @display.wm_delete_window_atom
 
             @windows[@handle][:should_close] = true if @handle && @windows[@handle]
             Event.new(:close)

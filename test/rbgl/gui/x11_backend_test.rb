@@ -302,7 +302,16 @@ class X11ConnectionTest < Test::Unit::TestCase
       [[6, 0], ->(data) { data[24, 4] = [12, 22].pack("ss") }, { type: :motion_notify, x: 12, y: 22 }],
       [[12, 0], ->(_data) {}, { type: :exposure }],
       [[22, 0], ->(data) { data[20, 4] = [320, 240].pack("vv") }, { type: :configure_notify, width: 320, height: 240 }],
-      [[33, 0], ->(data) { data[4, 4] = [7].pack("V"); data[8, 4] = [77].pack("V") }, { type: :client_message, window: 7, data: 77 }],
+      [
+        [33, 32],
+        lambda do |data|
+          data[1, 1] = [32].pack("C")
+          data[4, 4] = [7].pack("V")
+          data[8, 4] = [68].pack("V")
+          data[12, 20] = [77, 1, 2, 3, 4].pack("V5")
+        end,
+        { type: :client_message, format: 32, window: 7, message_type: 68, data32: [77, 1, 2, 3, 4] }
+      ],
       [[99, 0], ->(_data) {}, { type: :unknown, code: 99 }]
     ]
 
@@ -332,6 +341,7 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 31, connection.atom(:string)
     assert_equal 4, connection.atom(:atom)
     assert_equal 68, connection.atom(:wm_protocols)
+    assert_equal 68, connection.wm_protocols_atom
     assert_equal 69, connection.wm_delete_window_atom
     assert_equal 5, connection.atom(5)
     assert_equal 70, connection.atom(:custom)
@@ -422,6 +432,10 @@ class X11BackendTest < Test::Unit::TestCase
     def wm_delete_window_atom
       77
     end
+
+    def wm_protocols_atom
+      68
+    end
   end
 
   test "setup_window registers WM_DELETE_WINDOW protocol" do
@@ -506,12 +520,43 @@ class X11BackendTest < Test::Unit::TestCase
     backend.instance_variable_set(:@handle, 101)
     backend.instance_variable_set(:@windows, { 101 => { should_close: false } })
 
-    ignored = backend.send(:convert_event, type: :client_message, window: 101, data: 12)
-    event = backend.send(:convert_event, type: :client_message, window: 101, data: 77)
+    ignored = backend.send(
+      :convert_event,
+      type: :client_message,
+      window: 101,
+      message_type: 68,
+      data32: [12]
+    )
+    event = backend.send(
+      :convert_event,
+      type: :client_message,
+      window: 101,
+      message_type: 68,
+      data32: [77]
+    )
 
     assert_nil ignored
     assert_equal :close, event.type
     assert_true backend.should_close?
+  end
+
+  test "convert_event ignores client messages with a different message type" do
+    backend = RBGL::GUI::X11::Backend.allocate
+    display = FakeDisplay.new
+    backend.instance_variable_set(:@display, display)
+    backend.instance_variable_set(:@handle, 101)
+    backend.instance_variable_set(:@windows, { 101 => { should_close: false } })
+
+    event = backend.send(
+      :convert_event,
+      type: :client_message,
+      window: 101,
+      message_type: 12,
+      data32: [77]
+    )
+
+    assert_nil event
+    assert_false backend.should_close?
   end
 
   test "convert_event ignores client messages for other windows" do
@@ -521,7 +566,13 @@ class X11BackendTest < Test::Unit::TestCase
     backend.instance_variable_set(:@handle, 101)
     backend.instance_variable_set(:@windows, { 101 => { should_close: false } })
 
-    event = backend.send(:convert_event, type: :client_message, window: 202, data: 77)
+    event = backend.send(
+      :convert_event,
+      type: :client_message,
+      window: 202,
+      message_type: 68,
+      data32: [77]
+    )
 
     assert_nil event
     assert_false backend.should_close?

@@ -42,6 +42,10 @@ module RBGL
           atom(:wm_delete_window)
         end
 
+        def wm_protocols_atom
+          atom(:wm_protocols)
+        end
+
         def enable_wm_delete_window(window)
           change_property(window, :wm_protocols, :atom, [wm_delete_window_atom], format: 32)
         end
@@ -328,9 +332,16 @@ module RBGL
             width, height = data[20, 4].unpack("vv")
             { type: :configure_notify, width: width, height: height }
           when 33
+            format = data[1, 1].unpack1("C")
             window = data[4, 4].unpack1("V")
-            atom = data[8, 4].unpack1("V")
-            { type: :client_message, window: window, data: atom }
+            message_type = data[8, 4].unpack1("V")
+            {
+              type: :client_message,
+              format: format,
+              window: window,
+              message_type: message_type,
+              data32: data[12, 20].unpack("V5")
+            }
           else
             { type: :unknown, code: event_type }
           end
