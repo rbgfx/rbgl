@@ -40,13 +40,13 @@ module RBGL
 
       def draw_arrays(mode, first, count)
         validate_draw_state!
-        draw_vertices(mode, (first...first + count).map { |index| process_vertex(index) })
+        draw_vertices(mode, first...first + count)
       end
 
       def draw_elements(mode, count, offset = 0)
         validate_draw_state!(indexed: true)
         indices = @index_buffer.indices[offset, count] || []
-        draw_vertices(mode, indices.map { |index| process_vertex(index) })
+        draw_vertices(mode, indices, vertex_cache: {})
       end
 
       def width
@@ -69,14 +69,17 @@ module RBGL
         raise "No index buffer bound" if indexed && !@index_buffer
       end
 
-      def draw_vertices(mode, vertices)
-        each_primitive(mode, vertices) do |primitive|
+      def draw_vertices(mode, indices, vertex_cache: nil)
+        each_primitive(mode, indices) do |primitive_indices|
+          primitive = primitive_indices.map { |index| fetch_vertex(index, vertex_cache) }
           draw_primitive(mode, primitive)
         end
       end
 
       def each_primitive(mode, vertices)
         return enum_for(:each_primitive, mode, vertices) unless block_given?
+
+        vertices = vertices.to_a unless vertices.respond_to?(:[])
 
         case mode
         when :triangles
@@ -127,6 +130,13 @@ module RBGL
         input.each { |k, v| input_io[k] = v }
 
         @pipeline.vertex_shader.process(input_io, @uniforms)
+      end
+
+      def fetch_vertex(index, vertex_cache)
+        return process_vertex(index) unless vertex_cache
+        return vertex_cache[index] if vertex_cache.key?(index)
+
+        vertex_cache[index] = process_vertex(index)
       end
 
       def draw_triangle(v0, v1, v2)

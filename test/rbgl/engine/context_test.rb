@@ -140,6 +140,35 @@ class ContextTest < Test::Unit::TestCase
     @ctx.draw_elements(:triangle_fan, 4)
   end
 
+  test "draw_elements caches processed vertices for repeated indices" do
+    vertex_calls = 0
+    pipeline = RBGL::Engine::Pipeline.create do
+      self.cull_mode = :none
+
+      vertex do |input, _uniforms, output|
+        vertex_calls += 1
+        output.position = input[:position]
+        output.color = input[:color]
+      end
+
+      fragment do |input, _uniforms, output|
+        output.color = input[:color]
+      end
+    end
+
+    @vb.add_vertex(position: Larb::Vec4.new(0, 0.5, 0, 1), color: Larb::Color.new(1, 0, 0, 1))
+    @vb.add_vertex(position: Larb::Vec4.new(-0.5, -0.5, 0, 1), color: Larb::Color.new(0, 1, 0, 1))
+    @vb.add_vertex(position: Larb::Vec4.new(0.5, -0.5, 0, 1), color: Larb::Color.new(0, 0, 1, 1))
+    @ib.add(0, 1, 2, 0, 2, 1)
+    @ctx.bind_pipeline(pipeline)
+    @ctx.bind_vertex_buffer(@vb)
+    @ctx.bind_index_buffer(@ib)
+
+    @ctx.draw_elements(:triangles, 6)
+
+    assert_equal 3, vertex_calls
+  end
+
   test "clip_triangle? perspective divides Vec4 positions" do
     v0 = RBGL::Engine::ShaderIO.new
     v1 = RBGL::Engine::ShaderIO.new
