@@ -151,6 +151,26 @@ class RasterizerTest < Test::Unit::TestCase
     assert_equal :start, result[:tag]
   end
 
+  test "interpolate_line_attributes handles vector and color values" do
+    v0 = RBGL::Engine::ShaderIO.new
+    v0[:position] = Larb::Vec4.new(-0.5, 0.0, 0.0, 1.0)
+    v0[:uv] = Larb::Vec2.new(0.0, 1.0)
+    v0[:color] = Larb::Color.new(1.0, 0.0, 0.0, 1.0)
+
+    v1 = RBGL::Engine::ShaderIO.new
+    v1[:position] = Larb::Vec4.new(0.5, 0.0, 0.0, 1.0)
+    v1[:uv] = Larb::Vec2.new(1.0, 0.0)
+    v1[:color] = Larb::Color.new(0.0, 0.0, 1.0, 0.5)
+
+    result = @rasterizer.send(:interpolate_line_attributes, v0, v1, 0.25)
+
+    assert_in_delta 0.25, result[:uv].x, 0.001
+    assert_in_delta 0.75, result[:uv].y, 0.001
+    assert_in_delta 0.75, result[:color].r, 0.001
+    assert_in_delta 0.25, result[:color].b, 0.001
+    assert_in_delta 0.875, result[:color].a, 0.001
+  end
+
   private
 
   def create_vertex(x, y, z)

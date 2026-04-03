@@ -155,20 +155,9 @@ module RBGL
       end
 
       def interpolate_attributes(v0, v1, v2, w0, w1, w2)
-        result = ShaderIO.new
-
-        all_keys = (v0.to_h.keys | v1.to_h.keys | v2.to_h.keys) - [:position]
-
-        all_keys.each do |key|
-          a0 = v0[key]
-          a1 = v1[key]
-          a2 = v2[key]
-          next unless a0 && a1 && a2
-
-          result[key] = interpolate_value(a0, a1, a2, w0, w1, w2)
+        interpolate_attribute_set([v0, v1, v2]) do |a0, a1, a2|
+          interpolate_value(a0, a1, a2, w0, w1, w2)
         end
-
-        result
       end
 
       def interpolate_value(a, b, c, w0, w1, w2)
@@ -206,25 +195,26 @@ module RBGL
       end
 
       def interpolate_line_attributes(v0, v1, t)
+        interpolate_attribute_set([v0, v1]) do |a0, a1|
+          interpolate_value(a0, a1, a1, 1.0 - t, t, 0.0)
+        end
+      end
+
+      def interpolate_attribute_set(vertices)
         result = ShaderIO.new
-        all_keys = (v0.to_h.keys | v1.to_h.keys) - [:position]
 
-        all_keys.each do |key|
-          a0 = v0[key]
-          a1 = v1[key]
-          next unless a0 && a1
+        interpolated_keys(vertices).each do |key|
+          values = vertices.map { |vertex| vertex[key] }
+          next if values.any?(&:nil?)
 
-          result[key] = case a0
-                        when Larb::Vec2, Larb::Vec3, Larb::Vec4, Larb::Color
-                          a0.lerp(a1, t)
-                        when Numeric
-                          a0 + (a1 - a0) * t
-                        else
-                          a0
-                        end
+          result[key] = yield(*values)
         end
 
         result
+      end
+
+      def interpolated_keys(vertices)
+        vertices.flat_map { |vertex| vertex.to_h.keys }.uniq - [:position]
       end
     end
   end
