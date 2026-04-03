@@ -30,6 +30,7 @@ module RBGL
       end
 
       def poll_events
+        []
       end
 
       def should_close?

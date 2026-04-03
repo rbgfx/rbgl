@@ -102,6 +102,26 @@ class TestableBackend < RBGL::GUI::Backend
 end
 
 class BackendCallbackTest < Test::Unit::TestCase
+  test "dispatch_event routes key events" do
+    backend = TestableBackend.new(640, 480)
+    received = nil
+    backend.on_key { |key, action| received = [key, action] }
+
+    backend.dispatch_event(RBGL::GUI::Event.new(:key_press, key: 65))
+
+    assert_equal [65, :press], received
+  end
+
+  test "dispatch_event routes resize events" do
+    backend = TestableBackend.new(640, 480)
+    received = nil
+    backend.on_resize { |width, height| received = [width, height] }
+
+    backend.dispatch_event(RBGL::GUI::Event.new(:resize, width: 800, height: 600))
+
+    assert_equal [800, 600], received
+  end
+
   test "emit_key calls key callback" do
     backend = TestableBackend.new(640, 480)
     received = nil

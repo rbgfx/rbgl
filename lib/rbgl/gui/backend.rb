@@ -58,6 +58,22 @@ module RBGL
         @resize_callback = block
       end
 
+      def dispatch_event(event)
+        case event.type
+        when :key_press, :key_release
+          emit_key(event.key, event.type == :key_press ? :press : :release)
+        when :mouse_press, :mouse_release, :mouse_move
+          action = case event.type
+                   when :mouse_press then :press
+                   when :mouse_release then :release
+                   else :move
+                   end
+          emit_mouse(event.x, event.y, event[:button], action)
+        when :resize
+          emit_resize(event.width, event.height)
+        end
+      end
+
       protected
 
       def emit_key(key, action)

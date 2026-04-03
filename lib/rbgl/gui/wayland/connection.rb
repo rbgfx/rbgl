@@ -155,7 +155,7 @@ module RBGL
       end
 
       class Connection
-        attr_reader :compositor, :shm, :xdg_wm_base
+        attr_reader :compositor, :shm, :xdg_wm_base, :registry
 
         def initialize
           socket_path = ENV["WAYLAND_DISPLAY"] || "wayland-0"
@@ -168,12 +168,13 @@ module RBGL
           @objects = {}
           @next_id = 2
           @globals = {}
+          @pending_events = []
 
           @display = Display.new(self)
           @objects[1] = @display
 
-          registry = @display.get_registry
-          @objects[registry.id] = registry
+          @registry = @display.get_registry
+          @objects[@registry.id] = @registry
           flush
           roundtrip
 
@@ -215,6 +216,10 @@ module RBGL
             payload = size > 8 ? @socket.read(size - 8) : ""
             handle_event(object_id, opcode, payload)
           end
+
+          events = @pending_events
+          @pending_events = []
+          events
         end
 
         def roundtrip
@@ -231,44 +236,40 @@ module RBGL
         private
 
         def handle_event(object_id, opcode, payload)
-          case object_id
-          when 2
-            if opcode == 0
-              name = payload[0, 4].unpack1("V")
-              interface_len = payload[4, 4].unpack1("V")
-              interface = payload[8, interface_len - 1]
-              version = payload[8 + pad_length(interface_len), 4].unpack1("V")
-              @globals[interface] = { name: name, version: version }
-            end
-          else
-            obj = @objects[object_id]
-            if obj.is_a?(Callback) && opcode == 0
-              obj.handle_done
-            end
+          obj = @objects[object_id]
+
+          case obj
+          when Registry
+            handle_registry_event(opcode, payload)
+          when Callback
+            obj.handle_done if opcode == 0
+          when XdgWmBase
+            handle_xdg_wm_base_event(obj, opcode, payload)
+          when XdgSurface
+            handle_xdg_surface_event(obj, opcode, payload)
+          when XdgToplevel
+            handle_xdg_toplevel_event(object_id, opcode, payload)
           end
         end
 
         def bind_globals
           if @globals["wl_compositor"]
-            id = allocate_id
             g = @globals["wl_compositor"]
-            @objects[2].bind(g[:name], "wl_compositor", [g[:version], 4].min)
+            id = @registry.bind(g[:name], "wl_compositor", [g[:version], 4].min)
             @compositor = Compositor.new(self, id)
             @objects[id] = @compositor
           end
 
           if @globals["wl_shm"]
-            id = allocate_id
             g = @globals["wl_shm"]
-            @objects[2].bind(g[:name], "wl_shm", [g[:version], 1].min)
+            id = @registry.bind(g[:name], "wl_shm", [g[:version], 1].min)
             @shm = Shm.new(self, id)
             @objects[id] = @shm
           end
 
           if @globals["xdg_wm_base"]
-            id = allocate_id
             g = @globals["xdg_wm_base"]
-            @objects[2].bind(g[:name], "xdg_wm_base", [g[:version], 2].min)
+            id = @registry.bind(g[:name], "xdg_wm_base", [g[:version], 2].min)
             @xdg_wm_base = XdgWmBase.new(self, id)
             @objects[id] = @xdg_wm_base
           end
@@ -298,16 +299,55 @@ module RBGL
         def pad_length(len)
           ((len + 3) / 4) * 4
         end
+
+        def handle_registry_event(opcode, payload)
+          return unless opcode == 0
+
+          name = payload[0, 4].unpack1("V")
+          interface_len = payload[4, 4].unpack1("V")
+          interface = payload[8, interface_len - 1]
+          version = payload[8 + pad_length(interface_len), 4].unpack1("V")
+          @globals[interface] = { name: name, version: version }
+        end
+
+        def handle_xdg_wm_base_event(obj, opcode, payload)
+          return unless opcode == 0
+
+          obj.pong(payload.unpack1("V"))
+          flush
+        end
+
+        def handle_xdg_surface_event(obj, opcode, payload)
+          return unless opcode == 0
+
+          obj.ack_configure(payload.unpack1("V"))
+          flush
+        end
+
+        def handle_xdg_toplevel_event(object_id, opcode, payload)
+          case opcode
+          when 0
+            width, height = payload[0, 8].unpack("l<l<")
+            @pending_events << {
+              type: :xdg_toplevel_configure,
+              object_id: object_id,
+              width: width,
+              height: height
+            }
+          when 1
+            @pending_events << { type: :xdg_toplevel_close, object_id: object_id }
+          end
+        end
       end
 
       class ShmBuffer
         attr_reader :wl_buffer
 
-        def initialize(fd, size, wl_buffer)
-          @fd = fd
-          @size = size
+        def initialize(file, pool, wl_buffer)
+          @file = file
+          @pool = pool
           @wl_buffer = wl_buffer
-          @file = File.open("/proc/self/fd/#{fd}", "r+b")
+          @file.binmode
           @file.seek(0)
         end
 
@@ -323,7 +363,8 @@ module RBGL
 
         def destroy
           @wl_buffer.destroy
-          @file.close
+          @pool.destroy
+          @file.close unless @file.closed?
         end
       end
     end

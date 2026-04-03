@@ -2,6 +2,7 @@
 
 require_relative "gui/event"
 require_relative "gui/backend"
+require_relative "gui/backend_factory"
 require_relative "gui/file_backend"
 require_relative "gui/window"
 

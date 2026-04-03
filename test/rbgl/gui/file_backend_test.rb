@@ -29,8 +29,8 @@ class FileBackendTest < Test::Unit::TestCase
     assert_true @backend.should_close?
   end
 
-  test "poll_events returns nil" do
-    assert_nil @backend.poll_events
+  test "poll_events returns an empty array" do
+    assert_equal [], @backend.poll_events
   end
 
   test "present creates PPM file" do

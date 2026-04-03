@@ -56,15 +56,7 @@ module RBGL
         end
 
         def poll_events
-          events = []
-          @connection.dispatch_pending
-
-          if @handle && @windows[@handle]
-            events.concat(@windows[@handle][:pending_events])
-            @windows[@handle][:pending_events] = []
-          end
-
-          events
+          @connection.dispatch_pending.filter_map { |event| convert_event(event) }
         end
 
         def should_close?
@@ -85,6 +77,7 @@ module RBGL
           window[:surface].destroy
           window[:shm_buffer].destroy
           @windows.delete(@handle)
+          @handle = nil
         end
 
         private
@@ -93,15 +86,37 @@ module RBGL
           framebuffer.to_bgra_bytes
         end
 
+        def convert_event(raw)
+          window = window_for_event(raw[:object_id])
+          return nil unless window
+
+          case raw[:type]
+          when :xdg_toplevel_close
+            window[:should_close] = true
+            Event.new(:close)
+          when :xdg_toplevel_configure
+            width = raw[:width]
+            height = raw[:height]
+            return nil unless width.positive? && height.positive?
+
+            window[:width] = width
+            window[:height] = height
+            Event.new(:resize, width: width, height: height)
+          end
+        end
+
+        def window_for_event(object_id)
+          @windows.values.find { |window| window[:toplevel].id == object_id }
+        end
+
         def create_shm_buffer(width, height)
           size = width * height * 4
 
-          fd = create_anonymous_file(size)
-
-          pool = @connection.shm.create_pool(fd, size)
+          file = create_anonymous_file(size)
+          pool = @connection.shm.create_pool(file.fileno, size)
           buffer = pool.create_buffer(0, width, height, width * 4, :argb8888)
 
-          ShmBuffer.new(fd, size, buffer)
+          ShmBuffer.new(file, pool, buffer)
         end
 
         def create_anonymous_file(size)
@@ -110,15 +125,13 @@ module RBGL
 
           file = File.open(path, File::RDWR | File::CREAT | File::EXCL, 0o600)
           file.truncate(size)
-          fd = file.fileno
           File.unlink(path)
-
-          fd
+          file
         rescue Errno::ENOENT
           require "tempfile"
           tmpfile = Tempfile.new("rbgl")
           tmpfile.truncate(size)
-          tmpfile.fileno
+          tmpfile
         end
       end
     end

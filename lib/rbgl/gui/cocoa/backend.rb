@@ -32,17 +32,7 @@ module RBGL
           return [] unless @handle
 
           raw_events = Metaco.poll_events(@handle)
-          events = []
-
-          raw_events.each do |e|
-            event = convert_event(e)
-            if event
-              events << event
-              emit_from_event(event)
-            end
-          end
-
-          events
+          raw_events.filter_map { |event| convert_event(event) }
         end
 
         def poll_events_raw
@@ -99,20 +89,6 @@ module RBGL
             Event.new(:mouse_move, x: raw[:x], y: raw[:y])
           else
             nil
-          end
-        end
-
-        def emit_from_event(event)
-          case event.type
-          when :key_press, :key_release
-            emit_key(event.key, event.type == :key_press ? :press : :release)
-          when :mouse_press, :mouse_release, :mouse_move
-            action = case event.type
-                     when :mouse_press then :press
-                     when :mouse_release then :release
-                     else :move
-                     end
-            emit_mouse(event.x, event.y, event[:button], action)
           end
         end
       end

@@ -10,26 +10,7 @@ module RBGL
         @height = height
         @title = title
         @context = Engine::Context.new(width: width, height: height)
-
-        @backend = case backend
-                   when :auto, :native
-                     detect_backend(width, height, title)
-                   when :file
-                     FileBackend.new(width, height, title, **options)
-                   when :x11
-                     require_relative "x11/backend"
-                     X11::Backend.new(width, height, title)
-                   when :wayland
-                     require_relative "wayland/backend"
-                     Wayland::Backend.new(width, height, title)
-                   when :cocoa
-                     require_relative "cocoa/backend"
-                     Cocoa::Backend.new(width, height, title)
-                   when Backend
-                     backend
-                   else
-                     raise "Unknown backend: #{backend}"
-                   end
+        @backend = build_backend(backend, width: width, height: height, title: title, **options)
 
         @running = false
         @frame_callback = nil
@@ -51,10 +32,15 @@ module RBGL
         @backend.on_mouse(&block)
       end
 
+      def on_resize(&block)
+        @backend.on_resize(&block)
+      end
+
       def run(&frame_callback)
         @frame_callback = frame_callback
         @running = true
         @start_time = Time.now
+        @last_time = @start_time
 
         while @running && !@backend.should_close?
           current_time = Time.now
@@ -112,34 +98,15 @@ module RBGL
 
       private
 
-      def detect_backend(width, height, title)
-        case RUBY_PLATFORM
-        when /darwin/
-          require_relative "cocoa/backend"
-          Cocoa::Backend.new(width, height, title)
-        when /linux/
-          if ENV["WAYLAND_DISPLAY"]
-            require_relative "wayland/backend"
-            Wayland::Backend.new(width, height, title)
-          elsif ENV["DISPLAY"]
-            require_relative "x11/backend"
-            X11::Backend.new(width, height, title)
-          else
-            raise "No display server found (DISPLAY or WAYLAND_DISPLAY not set)"
-          end
-        else
-          raise "Unsupported platform: #{RUBY_PLATFORM}"
-        end
+      def build_backend(backend, width:, height:, title:, **options)
+        BackendFactory.build(backend, width: width, height: height, title: title, **options)
       end
 
       def process_events
-        events = @backend.poll_events
-
-        return unless events.is_a?(Array)
-
-        events.each do |event|
+        Array(@backend.poll_events).each do |event|
           next unless event.is_a?(Event)
 
+          @backend.dispatch_event(event)
           @event_handlers[event.type].each { |handler| handler.call(event) }
         end
       end

@@ -81,10 +81,7 @@ module RBGL
             next unless raw_event
 
             event = convert_event(raw_event)
-            if event
-              events << event
-              emit_from_event(event)
-            end
+            events << event if event
           end
 
           events
@@ -102,6 +99,7 @@ module RBGL
           @windows[@handle][:should_close] = true
           @display.destroy_window(@handle)
           @windows.delete(@handle)
+          @handle = nil
         end
 
         private
@@ -132,22 +130,6 @@ module RBGL
             Event.new(:close)
           else
             nil
-          end
-        end
-
-        def emit_from_event(event)
-          case event.type
-          when :key_press, :key_release
-            emit_key(event.key, event.type == :key_press ? :press : :release)
-          when :mouse_press, :mouse_release, :mouse_move
-            action = case event.type
-                     when :mouse_press then :press
-                     when :mouse_release then :release
-                     else :move
-                     end
-            emit_mouse(event.x, event.y, event[:button], action)
-          when :resize
-            emit_resize(event.width, event.height)
           end
         end
       end
