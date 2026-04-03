@@ -13,11 +13,18 @@ class VertexAttributeTest < Test::Unit::TestCase
   test "converts string name to symbol" do
     attr = RBGL::Engine::VertexAttribute.new("color", 4, 3)
     assert_equal :color, attr.name
+    assert_equal :color, attr.kind
   end
 
   test "default offset is 0" do
     attr = RBGL::Engine::VertexAttribute.new(:uv, 2)
     assert_equal 0, attr.offset
+  end
+
+  test "supports explicit attribute kind" do
+    attr = RBGL::Engine::VertexAttribute.new(:tint, 4, 0, kind: :color)
+
+    assert_equal :color, attr.kind
   end
 end
 
@@ -31,10 +38,11 @@ class VertexLayoutTest < Test::Unit::TestCase
   test "creates layout with block" do
     layout = RBGL::Engine::VertexLayout.new do
       attribute :position, 3
-      attribute :color, 4
+      attribute :color, 4, kind: :color
     end
     assert_equal 2, layout.attributes.size
     assert_equal 7, layout.stride
+    assert_equal :color, layout.attributes[:color].kind
   end
 
   test "position_only creates layout with position attribute" do
@@ -91,6 +99,19 @@ class VertexBufferTest < Test::Unit::TestCase
     assert_equal 1, buffer.vertex_count
   end
 
+  test "truncates extra components to match attribute size" do
+    buffer = RBGL::Engine::VertexBuffer.new(@layout)
+
+    buffer.add_vertex(
+      position: Larb::Vec4.new(1.0, 2.0, 3.0, 1.0),
+      color: Larb::Color.new(1.0, 0.0, 0.0, 1.0)
+    )
+
+    vertex = buffer.get_vertex(0)
+    assert_equal 1.0, vertex[:position].x
+    assert_equal 3.0, vertex[:position].z
+  end
+
   test "adds numeric attributes as floats and restores scalar values" do
     layout = RBGL::Engine::VertexLayout.new do
       attribute :weight, 1
@@ -101,6 +122,17 @@ class VertexBufferTest < Test::Unit::TestCase
 
     assert_equal [2.0], buffer.data
     assert_equal 2.0, buffer.get_vertex(0)[:weight]
+  end
+
+  test "restores array attributes larger than vec4" do
+    layout = RBGL::Engine::VertexLayout.new do
+      attribute :weights, 5
+    end
+    buffer = RBGL::Engine::VertexBuffer.new(layout)
+
+    buffer.add_vertex(weights: [1, 2, 3, 4, 5])
+
+    assert_equal [1.0, 2.0, 3.0, 4.0, 5.0], buffer.get_vertex(0)[:weights]
   end
 
   test "restores vec2 and vec4 attributes" do
@@ -155,9 +187,36 @@ class VertexBufferTest < Test::Unit::TestCase
 
   test "raises error for missing attribute" do
     buffer = RBGL::Engine::VertexBuffer.new(@layout)
-    assert_raise(RuntimeError) do
+    assert_raise(ArgumentError) do
       buffer.add_vertex(position: [0, 0, 0])
     end
+  end
+
+  test "raises error for attribute values with the wrong arity" do
+    buffer = RBGL::Engine::VertexBuffer.new(@layout)
+
+    assert_raise(ArgumentError) do
+      buffer.add_vertex(position: [0, 0], color: [1, 1, 1, 1])
+    end
+  end
+
+  test "raises error for unsupported attribute value types" do
+    buffer = RBGL::Engine::VertexBuffer.new(@layout)
+
+    assert_raise(ArgumentError) do
+      buffer.add_vertex(position: Object.new, color: [1, 1, 1, 1])
+    end
+  end
+
+  test "explicit color kind restores custom color attributes" do
+    layout = RBGL::Engine::VertexLayout.new do
+      attribute :tint, 4, kind: :color
+    end
+    buffer = RBGL::Engine::VertexBuffer.new(layout)
+
+    buffer.add_vertex(tint: [0.1, 0.2, 0.3, 1.0])
+
+    assert_kind_of Larb::Color, buffer.get_vertex(0)[:tint]
   end
 
   test "from_array creates buffer from data" do

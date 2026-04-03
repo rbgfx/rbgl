@@ -3,12 +3,95 @@
 module RBGL
   module Engine
     class VertexAttribute
-      attr_reader :name, :size, :offset
+      attr_reader :name, :size, :offset, :kind
 
-      def initialize(name, size, offset = 0)
+      def initialize(name, size, offset = 0, kind: nil)
         @name = name.to_sym
         @size = size
         @offset = offset
+        @kind = (kind || infer_kind).to_sym
+        validate_kind!
+      end
+
+      def serialize(value)
+        values = extract_values(value)
+        validate_value_size!(values)
+        values.first(@size).map { |component| Float(component) }
+      rescue ArgumentError, TypeError => e
+        raise ArgumentError, "Invalid value for attribute #{name}: #{e.message}"
+      end
+
+      def deserialize(values)
+        case @kind
+        when :scalar
+          values[0]
+        when :vec2
+          Larb::Vec2.new(*values)
+        when :vec3
+          Larb::Vec3.new(*values)
+        when :vec4
+          Larb::Vec4.new(*values)
+        when :color
+          Larb::Color.new(*values)
+        when :array
+          values.dup
+        end
+      end
+
+      private
+
+      def infer_kind
+        return :color if @name == :color && @size == 4
+
+        case @size
+        when 1 then :scalar
+        when 2 then :vec2
+        when 3 then :vec3
+        when 4 then :vec4
+        else :array
+        end
+      end
+
+      def validate_kind!
+        expected_sizes = {
+          scalar: [1],
+          vec2: [2],
+          vec3: [3],
+          vec4: [4],
+          color: [4],
+          array: nil
+        }.fetch(@kind) do
+          raise ArgumentError, "Unsupported attribute kind: #{@kind}"
+        end
+
+        return if expected_sizes.nil? || expected_sizes.include?(@size)
+
+        raise ArgumentError, "Attribute #{name} kind #{@kind} requires size #{expected_sizes.join(' or ')}"
+      end
+
+      def extract_values(value)
+        case value
+        when Larb::Vec2
+          [value.x, value.y]
+        when Larb::Vec3
+          [value.x, value.y, value.z]
+        when Larb::Vec4
+          [value.x, value.y, value.z, value.w]
+        when Larb::Color
+          value.to_a
+        when Array
+          value
+        when Numeric
+          [value]
+        else
+          raise ArgumentError, "Unsupported attribute type #{value.class}"
+        end
+      end
+
+      def validate_value_size!(values)
+        return if values.size >= @size
+
+        raise ArgumentError, "Expected at least #{@size} components, got #{values.size}"
       end
     end
 
@@ -22,8 +105,8 @@ module RBGL
         @stride = @offset
       end
 
-      def attribute(name, size)
-        @attributes[name.to_sym] = VertexAttribute.new(name, size, @offset)
+      def attribute(name, size, kind: nil)
+        @attributes[name.to_sym] = VertexAttribute.new(name, size, @offset, kind: kind)
         @offset += size
       end
 
@@ -68,23 +151,9 @@ module RBGL
       def add_vertex(**attributes)
         vertex_data = []
         @layout.attributes.each do |name, attr|
-          value = attributes[name]
-          raise "Missing attribute: #{name}" unless value
+          raise ArgumentError, "Missing attribute: #{name}" unless attributes.key?(name)
 
-          case value
-          when Larb::Vec2
-            vertex_data.concat([value.x, value.y])
-          when Larb::Vec3
-            vertex_data.concat([value.x, value.y, value.z])
-          when Larb::Vec4
-            vertex_data.concat([value.x, value.y, value.z, value.w])
-          when Larb::Color
-            vertex_data.concat(value.to_a)
-          when Array
-            vertex_data.concat(value)
-          when Numeric
-            vertex_data << value.to_f
-          end
+          vertex_data.concat(attr.serialize(attributes[name]))
         end
         @data.concat(vertex_data)
         @vertex_count += 1
@@ -105,18 +174,7 @@ module RBGL
         @layout.attributes.each do |name, attr|
           offset = start + attr.offset
           values = @data[offset, attr.size]
-
-          vertex[name] = case attr.size
-                         when 1 then values[0]
-                         when 2 then Larb::Vec2.new(*values)
-                         when 3 then Larb::Vec3.new(*values)
-                         when 4
-                           if name == :color
-                             Larb::Color.new(*values)
-                           else
-                             Larb::Vec4.new(*values)
-                           end
-                         end
+          vertex[name] = attr.deserialize(values)
         end
 
         vertex
