@@ -50,23 +50,23 @@ class WindowTest < Test::Unit::TestCase
   end
 
   test "on_key delegates to backend" do
-    window = RBGL::GUI::Window.new(
-      width: 100,
-      height: 100,
-      backend: :file,
-      output_dir: @tmpdir
-    )
-    window.on_key { |_key, _action| }
+    backend = SpyWindowBackend.new(100, 100)
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+    handler = proc { |_key, _action| }
+
+    window.on_key(&handler)
+
+    assert_same handler, backend.key_handler
   end
 
   test "on_mouse delegates to backend" do
-    window = RBGL::GUI::Window.new(
-      width: 100,
-      height: 100,
-      backend: :file,
-      output_dir: @tmpdir
-    )
-    window.on_mouse { |_x, _y, _button, _action| }
+    backend = SpyWindowBackend.new(100, 100)
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+    handler = proc { |_x, _y, _button, _action| }
+
+    window.on_mouse(&handler)
+
+    assert_same handler, backend.mouse_handler
   end
 
   test "stop sets running to false" do
@@ -129,6 +129,142 @@ class WindowTest < Test::Unit::TestCase
       backend: backend
     )
     assert_same backend, window.backend
+  end
+
+  test "uses detect_backend for auto backend" do
+    window = DetectBackendWindow.new(width: 120, height: 80, title: "Auto", backend: :auto)
+
+    assert_equal [[120, 80, "Auto"]], window.detect_backend_calls
+    assert_kind_of SpyWindowBackend, window.backend
+  end
+
+  test "uses detect_backend for native backend" do
+    window = DetectBackendWindow.new(width: 90, height: 60, title: "Native", backend: :native)
+
+    assert_equal [[90, 60, "Native"]], window.detect_backend_calls
+    assert_kind_of SpyWindowBackend, window.backend
+  end
+
+  test "set_pixels delegates dimensions to backend" do
+    backend = SpyWindowBackend.new(100, 100)
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    window.set_pixels("pixels")
+
+    assert_equal ["pixels", 100, 100], backend.set_pixels_args
+  end
+
+  test "metal_available? delegates to backend" do
+    backend = SpyWindowBackend.new(100, 100)
+    backend.metal_available_value = true
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    assert_true window.metal_available?
+  end
+
+  test "native_handle delegates to backend" do
+    backend = SpyWindowBackend.new(100, 100)
+    backend.native_handle_value = :window_handle
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    assert_equal :window_handle, window.native_handle
+  end
+
+  test "should_close? delegates to backend" do
+    backend = SpyWindowBackend.new(100, 100)
+    backend.should_close = true
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    assert_true window.should_close?
+  end
+
+  test "poll_events_raw delegates to backend" do
+    backend = SpyWindowBackend.new(100, 100)
+    backend.raw_events = [{ type: :key_press }]
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    assert_equal [{ type: :key_press }], window.poll_events_raw
+  end
+
+  test "close delegates to backend" do
+    backend = SpyWindowBackend.new(100, 100)
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    window.close
+
+    assert_equal 1, backend.close_count
+    assert_true backend.should_close?
+  end
+end
+
+class SpyWindowBackend < RBGL::GUI::Backend
+  attr_reader :presented_framebuffers, :set_pixels_args, :close_count, :key_handler, :mouse_handler
+  attr_writer :should_close, :poll_events_result, :raw_events, :metal_available_value, :native_handle_value
+
+  def initialize(width, height, title = "RBGL")
+    super(width, height, title)
+    @presented_framebuffers = []
+    @poll_events_result = []
+    @raw_events = []
+    @should_close = false
+    @close_count = 0
+    @metal_available_value = false
+    @native_handle_value = nil
+  end
+
+  def present(framebuffer)
+    @presented_framebuffers << framebuffer
+  end
+
+  def poll_events
+    @poll_events_result
+  end
+
+  def poll_events_raw
+    @raw_events
+  end
+
+  def should_close?
+    @should_close
+  end
+
+  def close
+    @close_count += 1
+    @should_close = true
+  end
+
+  def set_pixels(buffer, width, height)
+    @set_pixels_args = [buffer, width, height]
+  end
+
+  def metal_available?
+    @metal_available_value
+  end
+
+  def native_handle
+    @native_handle_value
+  end
+
+  def on_key(&block)
+    @key_handler = block
+    super
+  end
+
+  def on_mouse(&block)
+    @mouse_handler = block
+    super
+  end
+end
+
+class DetectBackendWindow < RBGL::GUI::Window
+  attr_reader :detect_backend_calls
+
+  private
+
+  def detect_backend(width, height, title)
+    @detect_backend_calls ||= []
+    @detect_backend_calls << [width, height, title]
+    SpyWindowBackend.new(width, height, title)
   end
 end
 
@@ -229,5 +365,32 @@ class WindowRunTest < Test::Unit::TestCase
 
     window.run
     assert_equal 2, backend.present_count
+  end
+
+  test "process_events ignores non array payloads" do
+    backend = SpyWindowBackend.new(100, 100)
+    backend.poll_events_result = :invalid_payload
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    assert_nothing_raised do
+      window.send(:process_events)
+    end
+  end
+
+  test "process_events ignores non event entries and dispatches all handlers" do
+    backend = SpyWindowBackend.new(100, 100)
+    backend.poll_events_result = [
+      "noise",
+      RBGL::GUI::Event.new(:key_press, key: 65)
+    ]
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    received = []
+    window.on(:key_press) { |event| received << [:first, event.key] }
+    window.on(:key_press) { |event| received << [:second, event.key] }
+
+    window.send(:process_events)
+
+    assert_equal [[:first, 65], [:second, 65]], received
   end
 end

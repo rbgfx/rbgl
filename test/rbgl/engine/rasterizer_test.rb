@@ -98,6 +98,59 @@ class RasterizerTest < Test::Unit::TestCase
     @rasterizer.rasterize_point(v, @fragment_shader, @uniforms, size: 5)
   end
 
+  test "interpolate_value handles supported attribute types" do
+    vec2 = @rasterizer.send(
+      :interpolate_value,
+      Larb::Vec2.new(0.0, 1.0),
+      Larb::Vec2.new(2.0, 3.0),
+      Larb::Vec2.new(4.0, 5.0),
+      0.25, 0.25, 0.5
+    )
+    vec3 = @rasterizer.send(
+      :interpolate_value,
+      Larb::Vec3.new(0.0, 1.0, 2.0),
+      Larb::Vec3.new(2.0, 3.0, 4.0),
+      Larb::Vec3.new(4.0, 5.0, 6.0),
+      0.25, 0.25, 0.5
+    )
+    vec4 = @rasterizer.send(
+      :interpolate_value,
+      Larb::Vec4.new(0.0, 1.0, 2.0, 3.0),
+      Larb::Vec4.new(2.0, 3.0, 4.0, 5.0),
+      Larb::Vec4.new(4.0, 5.0, 6.0, 7.0),
+      0.25, 0.25, 0.5
+    )
+    numeric = @rasterizer.send(:interpolate_value, 1.0, 3.0, 5.0, 0.25, 0.25, 0.5)
+    passthrough = Object.new
+    same_object = @rasterizer.send(:interpolate_value, passthrough, Object.new, Object.new, 0.25, 0.25, 0.5)
+
+    assert_kind_of Larb::Vec2, vec2
+    assert_in_delta 2.5, vec2.x, 0.001
+    assert_kind_of Larb::Vec3, vec3
+    assert_in_delta 4.5, vec3.z, 0.001
+    assert_kind_of Larb::Vec4, vec4
+    assert_in_delta 5.5, vec4.w, 0.001
+    assert_in_delta 3.5, numeric, 0.001
+    assert_same passthrough, same_object
+  end
+
+  test "interpolate_line_attributes handles numeric and passthrough values" do
+    v0 = RBGL::Engine::ShaderIO.new
+    v0[:position] = Larb::Vec4.new(-0.5, 0.0, 0.0, 1.0)
+    v0[:weight] = 1.0
+    v0[:tag] = :start
+
+    v1 = RBGL::Engine::ShaderIO.new
+    v1[:position] = Larb::Vec4.new(0.5, 0.0, 0.0, 1.0)
+    v1[:weight] = 3.0
+    v1[:tag] = :finish
+
+    result = @rasterizer.send(:interpolate_line_attributes, v0, v1, 0.25)
+
+    assert_in_delta 1.5, result[:weight], 0.001
+    assert_equal :start, result[:tag]
+  end
+
   private
 
   def create_vertex(x, y, z)

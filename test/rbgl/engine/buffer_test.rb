@@ -91,6 +91,39 @@ class VertexBufferTest < Test::Unit::TestCase
     assert_equal 1, buffer.vertex_count
   end
 
+  test "adds numeric attributes as floats and restores scalar values" do
+    layout = RBGL::Engine::VertexLayout.new do
+      attribute :weight, 1
+    end
+    buffer = RBGL::Engine::VertexBuffer.new(layout)
+
+    buffer.add_vertex(weight: 2)
+
+    assert_equal [2.0], buffer.data
+    assert_equal 2.0, buffer.get_vertex(0)[:weight]
+  end
+
+  test "restores vec2 and vec4 attributes" do
+    layout = RBGL::Engine::VertexLayout.new do
+      attribute :uv, 2
+      attribute :tangent, 4
+    end
+    buffer = RBGL::Engine::VertexBuffer.new(layout)
+
+    buffer.add_vertex(
+      uv: Larb::Vec2.new(0.25, 0.75),
+      tangent: Larb::Vec4.new(1.0, 0.0, 0.0, 1.0)
+    )
+    vertex = buffer.get_vertex(0)
+
+    assert_kind_of Larb::Vec2, vertex[:uv]
+    assert_equal 0.25, vertex[:uv].x
+    assert_equal 0.75, vertex[:uv].y
+    assert_kind_of Larb::Vec4, vertex[:tangent]
+    assert_equal 1.0, vertex[:tangent].x
+    assert_equal 1.0, vertex[:tangent].w
+  end
+
   test "add_vertex returns self for chaining" do
     buffer = RBGL::Engine::VertexBuffer.new(@layout)
     result = buffer.add_vertex(position: [0, 0, 0], color: [1, 1, 1, 1])

@@ -72,6 +72,11 @@ class UniformsTest < Test::Unit::TestCase
     h = uniforms.to_h
     assert_equal({ time: 1.0 }, h)
   end
+
+  test "respond_to_missing returns true" do
+    uniforms = RBGL::Engine::Uniforms.new
+    assert uniforms.respond_to?(:anything)
+  end
 end
 
 class ShaderBuiltinsTest < Test::Unit::TestCase
@@ -177,6 +182,14 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 0.0, c.x
     assert_equal 0.5, c.y
     assert_equal 1.0, c.z
+  end
+
+  test "clamp clamps colors" do
+    c = clamp(Larb::Color.new(-1.0, 0.5, 2.0, 1.5), 0.0, 1.0)
+    assert_equal 0.0, c.r
+    assert_equal 0.5, c.g
+    assert_equal 1.0, c.b
+    assert_equal 1.0, c.a
   end
 
   test "saturate clamps to 0-1" do
@@ -311,6 +324,24 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 3, max(1, 2, 3)
   end
 
+  test "texture samples through the texture object" do
+    texture = Object.new
+    texture.define_singleton_method(:sample) do |u, v, lod: 0|
+      [u, v, lod]
+    end
+
+    assert_equal [0.25, 0.75, 0], self.texture(texture, Larb::Vec2.new(0.25, 0.75))
+  end
+
+  test "texture_lod forwards lod to the texture object" do
+    texture = Object.new
+    texture.define_singleton_method(:sample) do |u, v, lod: 0|
+      [u, v, lod]
+    end
+
+    assert_equal [0.1, 0.9, 2], texture_lod(texture, Larb::Vec2.new(0.1, 0.9), 2)
+  end
+
   test "rgb creates color" do
     c = rgb(1, 0, 0)
     assert_kind_of Larb::Color, c
@@ -319,6 +350,21 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
   test "rgba creates color with alpha" do
     c = rgba(1, 0, 0, 0.5)
     assert_equal 0.5, c.a
+  end
+
+  test "color_from_vec3 creates color" do
+    c = color_from_vec3(Larb::Vec3.new(0.1, 0.2, 0.3))
+    assert_equal 0.1, c.r
+    assert_equal 0.2, c.g
+    assert_equal 0.3, c.b
+  end
+
+  test "color_from_vec4 creates color" do
+    c = color_from_vec4(Larb::Vec4.new(0.1, 0.2, 0.3, 0.4))
+    assert_equal 0.1, c.r
+    assert_equal 0.2, c.g
+    assert_equal 0.3, c.b
+    assert_equal 0.4, c.a
   end
 end
 

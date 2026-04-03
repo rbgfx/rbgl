@@ -130,6 +130,18 @@ class ContextTest < Test::Unit::TestCase
     @ctx.draw_elements(:lines, 2)
   end
 
+  test "clip_triangle? perspective divides Vec4 positions" do
+    v0 = RBGL::Engine::ShaderIO.new
+    v1 = RBGL::Engine::ShaderIO.new
+    v2 = RBGL::Engine::ShaderIO.new
+
+    v0[:position] = Larb::Vec4.new(4.0, 0.0, 0.0, 2.0)
+    v1[:position] = Larb::Vec4.new(6.0, 0.0, 0.0, 2.0)
+    v2[:position] = Larb::Vec4.new(8.0, 0.0, 0.0, 2.0)
+
+    assert_true @ctx.send(:clip_triangle?, v0, v1, v2)
+  end
+
   private
 
   def setup_triangle

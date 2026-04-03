@@ -29,6 +29,11 @@ class BackendTest < Test::Unit::TestCase
     end
   end
 
+  test "poll_events_raw returns empty array by default" do
+    backend = RBGL::GUI::Backend.new(640, 480)
+    assert_equal [], backend.poll_events_raw
+  end
+
   test "should_close? raises NotImplementedError" do
     backend = RBGL::GUI::Backend.new(640, 480)
     assert_raise(NotImplementedError) do
@@ -41,6 +46,23 @@ class BackendTest < Test::Unit::TestCase
     assert_raise(NotImplementedError) do
       backend.close
     end
+  end
+
+  test "set_pixels raises NotImplementedError" do
+    backend = RBGL::GUI::Backend.new(640, 480)
+    assert_raise(NotImplementedError) do
+      backend.set_pixels("pixels", 640, 480)
+    end
+  end
+
+  test "metal_available? returns false by default" do
+    backend = RBGL::GUI::Backend.new(640, 480)
+    assert_false backend.metal_available?
+  end
+
+  test "native_handle returns nil by default" do
+    backend = RBGL::GUI::Backend.new(640, 480)
+    assert_nil backend.native_handle
   end
 
   test "on_key stores callback" do
