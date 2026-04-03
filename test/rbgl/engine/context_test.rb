@@ -130,6 +130,16 @@ class ContextTest < Test::Unit::TestCase
     @ctx.draw_elements(:lines, 2)
   end
 
+  test "draw_elements with triangle_strip mode" do
+    setup_indexed_quad_strip
+    @ctx.draw_elements(:triangle_strip, 4)
+  end
+
+  test "draw_elements with triangle_fan mode" do
+    setup_indexed_quad_strip
+    @ctx.draw_elements(:triangle_fan, 4)
+  end
+
   test "clip_triangle? perspective divides Vec4 positions" do
     v0 = RBGL::Engine::ShaderIO.new
     v1 = RBGL::Engine::ShaderIO.new
@@ -167,6 +177,17 @@ class ContextTest < Test::Unit::TestCase
     @vb.add_vertex(position: Larb::Vec4.new(-0.5, -0.5, 0, 1), color: Larb::Color.new(0, 1, 0, 1))
     @vb.add_vertex(position: Larb::Vec4.new(0.5, -0.5, 0, 1), color: Larb::Color.new(0, 0, 1, 1))
     @ib.add(0, 1, 2)
+    @ctx.bind_vertex_buffer(@vb)
+    @ctx.bind_index_buffer(@ib)
+  end
+
+  def setup_indexed_quad_strip
+    @ctx.bind_pipeline(@pipeline)
+    @vb.add_vertex(position: Larb::Vec4.new(-0.5, 0.5, 0, 1), color: Larb::Color.new(1, 1, 1, 1))
+    @vb.add_vertex(position: Larb::Vec4.new(-0.5, -0.5, 0, 1), color: Larb::Color.new(1, 1, 1, 1))
+    @vb.add_vertex(position: Larb::Vec4.new(0.5, 0.5, 0, 1), color: Larb::Color.new(1, 1, 1, 1))
+    @vb.add_vertex(position: Larb::Vec4.new(0.5, -0.5, 0, 1), color: Larb::Color.new(1, 1, 1, 1))
+    @ib.add(0, 1, 2, 3)
     @ctx.bind_vertex_buffer(@vb)
     @ctx.bind_index_buffer(@ib)
   end
