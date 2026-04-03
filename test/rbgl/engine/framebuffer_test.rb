@@ -174,8 +174,13 @@ class FramebufferTest < Test::Unit::TestCase
   end
 
   test "to_rgba_bytes generates RGBA byte array" do
+    red = Larb::Color.new(1.0, 0.0, 0.0, 0.5)
+    @fb.set_pixel(0, 0, red)
     bytes = @fb.to_rgba_bytes
+    unpacked = bytes.unpack("C*")
+
     assert_equal 400, bytes.bytesize
+    assert_equal [255, 0, 0, 128], unpacked[0, 4]
   end
 
   test "to_bgra_bytes generates BGRA byte array" do

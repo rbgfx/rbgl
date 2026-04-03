@@ -75,38 +75,16 @@ module RBGL
 
       def to_ppm_binary
         header = "P6\n#{@width} #{@height}\n255\n"
-        pixels = @color_buffer.flat_map { |c| c.to_bytes[0..2] }.pack("C*")
+        pixels = packed_color_bytes(%i[r g b])
         header + pixels
       end
 
       def to_rgba_bytes
-        size = @color_buffer.size
-        bytes = Array.new(size * 4)
-        i = 0
-        size.times do |idx|
-          c = @color_buffer[idx]
-          bytes[i] = (c.r * 255).round.clamp(0, 255)
-          bytes[i + 1] = (c.g * 255).round.clamp(0, 255)
-          bytes[i + 2] = (c.b * 255).round.clamp(0, 255)
-          bytes[i + 3] = (c.a * 255).round.clamp(0, 255)
-          i += 4
-        end
-        bytes.pack("C*")
+        packed_color_bytes(%i[r g b a])
       end
 
       def to_bgra_bytes
-        size = @color_buffer.size
-        bytes = Array.new(size * 4)
-        i = 0
-        size.times do |idx|
-          c = @color_buffer[idx]
-          bytes[i] = (c.b * 255).round.clamp(0, 255)
-          bytes[i + 1] = (c.g * 255).round.clamp(0, 255)
-          bytes[i + 2] = (c.r * 255).round.clamp(0, 255)
-          bytes[i + 3] = (c.a * 255).round.clamp(0, 255)
-          i += 4
-        end
-        bytes.pack("C*")
+        packed_color_bytes(%i[b g r a])
       end
 
       private
@@ -125,6 +103,14 @@ module RBGL
         else
           source
         end
+      end
+
+      def packed_color_bytes(channels)
+        @color_buffer.flat_map do |color|
+          channels.map do |channel|
+            (color.public_send(channel) * 255).round.clamp(0, 255)
+          end
+        end.pack("C*")
       end
     end
   end
