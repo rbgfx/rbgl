@@ -2,29 +2,32 @@
 
 module RBGL
   module Engine
-    class ShaderIO
-      def initialize
+    class DynamicData
+      def initialize(data = {})
         @data = {}
+        data.to_h.each { |key, value| self[key] = value }
       end
 
       def method_missing(name, *args)
-        if name.to_s.end_with?("=")
-          @data[name.to_s.chomp("=").to_sym] = args.first
+        if writer_method?(name)
+          self[writer_key(name)] = args.first
+        elsif args.empty?
+          self[name]
         else
-          @data[name]
+          super
         end
       end
 
-      def respond_to_missing?(_name, _include_private = false)
-        true
+      def respond_to_missing?(name, include_private = false)
+        writer_method?(name) || @data.key?(normalize_key(name)) || super
       end
 
       def [](key)
-        @data[key]
+        @data[normalize_key(key)]
       end
 
       def []=(key, value)
-        @data[key] = value
+        @data[normalize_key(key)] = value
       end
 
       def to_h
@@ -34,39 +37,28 @@ module RBGL
       def keys
         @data.keys
       end
+
+      private
+
+      def normalize_key(key)
+        key.to_s.chomp("=").to_sym
+      end
+
+      def writer_method?(name)
+        name.to_s.end_with?("=")
+      end
+
+      def writer_key(name)
+        name.to_s.chomp("=").to_sym
+      end
     end
 
-    class Uniforms
-      def initialize(data = {})
-        @data = data.transform_keys(&:to_sym)
-      end
+    class ShaderIO < DynamicData
+    end
 
-      def method_missing(name, *args)
-        if name.to_s.end_with?("=")
-          @data[name.to_s.chomp("=").to_sym] = args.first
-        else
-          @data[name]
-        end
-      end
-
-      def respond_to_missing?(_name, _include_private = false)
-        true
-      end
-
-      def [](key)
-        @data[key.to_sym]
-      end
-
-      def []=(key, value)
-        @data[key.to_sym] = value
-      end
-
+    class Uniforms < DynamicData
       def merge(other)
         Uniforms.new(@data.merge(other.to_h))
-      end
-
-      def to_h
-        @data.dup
       end
     end
 
@@ -267,7 +259,7 @@ module RBGL
       end
     end
 
-    class VertexShader
+    class BaseShader
       include ShaderBuiltins
 
       def initialize(&block)
@@ -281,44 +273,42 @@ module RBGL
         @output = output
 
         instance_exec(input, uniforms, output, &@process_block)
+        finalize_output(output)
+      end
 
+      attr_reader :input, :uniforms, :output
+
+      def self.create(&block)
+        new(&block)
+      end
+
+      private
+
+      def finalize_output(output)
+        output
+      end
+    end
+
+    class VertexShader < BaseShader
+      private
+
+      def finalize_output(output)
         raise "VertexShader must set output.position" unless output[:position]
 
         output
       end
-
-      attr_reader :input, :uniforms, :output
-
-      def self.create(&block)
-        new(&block)
-      end
     end
 
-    class FragmentShader
-      include ShaderBuiltins
+    class FragmentShader < BaseShader
+      private
 
-      def initialize(&block)
-        @process_block = block
-      end
-
-      def process(input, uniforms)
-        output = ShaderIO.new
-        @input = input
-        @uniforms = uniforms
-        @output = output
-
-        instance_exec(input, uniforms, output, &@process_block)
-
+      def finalize_output(output)
         output[:color] ||= Larb::Color.white
 
         output
       end
-
-      attr_reader :input, :uniforms, :output
-
-      def self.create(&block)
-        new(&block)
-      end
     end
+
+    private_constant :DynamicData
   end
 end

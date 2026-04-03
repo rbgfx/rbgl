@@ -30,9 +30,13 @@ class ShaderIOTest < Test::Unit::TestCase
     assert_equal [:x, :y], io.keys
   end
 
-  test "respond_to_missing returns true" do
+  test "respond_to reports existing keys and writers" do
     io = RBGL::Engine::ShaderIO.new
-    assert io.respond_to?(:anything)
+    io[:anything] = 1
+
+    assert_true io.respond_to?(:anything)
+    assert_true io.respond_to?(:anything=)
+    assert_false io.respond_to?(:missing)
   end
 end
 
@@ -73,9 +77,13 @@ class UniformsTest < Test::Unit::TestCase
     assert_equal({ time: 1.0 }, h)
   end
 
-  test "respond_to_missing returns true" do
+  test "respond_to reports existing keys and writers" do
     uniforms = RBGL::Engine::Uniforms.new
-    assert uniforms.respond_to?(:anything)
+    uniforms.time = 1.0
+
+    assert_true uniforms.respond_to?(:time)
+    assert_true uniforms.respond_to?(:time=)
+    assert_false uniforms.respond_to?(:missing)
   end
 end
 
