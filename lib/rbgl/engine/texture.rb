@@ -30,11 +30,7 @@ module RBGL
         x = u * (@width - 1)
         y = v * (@height - 1)
 
-        if @filter_mag == FILTER_NEAREST
-          sample_nearest(x, y)
-        else
-          sample_bilinear(x, y)
-        end
+        sample_with_filter(x, y, filter_for_lod(lod))
       end
 
       def get_pixel(x, y)
@@ -101,6 +97,19 @@ module RBGL
 
       def sample_nearest(x, y)
         get_pixel(x.round, y.round)
+      end
+
+      def filter_for_lod(lod)
+        lod.to_f.positive? ? @filter_min : @filter_mag
+      end
+
+      def sample_with_filter(x, y, filter)
+        case filter
+        when FILTER_NEAREST
+          sample_nearest(x, y)
+        else
+          sample_bilinear(x, y)
+        end
       end
 
       def sample_bilinear(x, y)

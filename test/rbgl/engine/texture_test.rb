@@ -93,6 +93,38 @@ class TextureTest < Test::Unit::TestCase
     assert_kind_of Larb::Color, color
   end
 
+  test "sample uses magnification filter when lod is zero" do
+    tex = RBGL::Engine::Texture.new(2, 2)
+    tex.set_pixel(0, 0, Larb::Color.rgb(1.0, 0.0, 0.0))
+    tex.set_pixel(1, 0, Larb::Color.rgb(0.0, 1.0, 0.0))
+    tex.set_pixel(0, 1, Larb::Color.rgb(0.0, 0.0, 1.0))
+    tex.set_pixel(1, 1, Larb::Color.rgb(1.0, 1.0, 1.0))
+    tex.filter_mag = :nearest
+    tex.filter_min = :linear
+
+    color = tex.sample(0.5, 0.5, lod: 0)
+
+    assert_in_delta 1.0, color.r, 0.001
+    assert_in_delta 1.0, color.g, 0.001
+    assert_in_delta 1.0, color.b, 0.001
+  end
+
+  test "sample uses minification filter when lod is positive" do
+    tex = RBGL::Engine::Texture.new(2, 2)
+    tex.set_pixel(0, 0, Larb::Color.rgb(1.0, 0.0, 0.0))
+    tex.set_pixel(1, 0, Larb::Color.rgb(0.0, 1.0, 0.0))
+    tex.set_pixel(0, 1, Larb::Color.rgb(0.0, 0.0, 1.0))
+    tex.set_pixel(1, 1, Larb::Color.rgb(1.0, 1.0, 1.0))
+    tex.filter_mag = :nearest
+    tex.filter_min = :linear
+
+    color = tex.sample(0.5, 0.5, lod: 1)
+
+    assert_in_delta 0.5, color.r, 0.001
+    assert_in_delta 0.5, color.g, 0.001
+    assert_in_delta 0.5, color.b, 0.001
+  end
+
   test "checker creates checkerboard texture" do
     tex = RBGL::Engine::Texture.checker(8, 8, 2)
     assert_equal 8, tex.width
