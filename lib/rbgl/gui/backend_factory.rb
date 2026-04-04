@@ -64,10 +64,6 @@ module RBGL
           raise RuntimeError, "Failed to initialize any native backend (#{details})"
         end
 
-        def native_backend_key(platform: RUBY_PLATFORM, env: ENV)
-          native_backend_candidates(platform: platform, env: env).first
-        end
-
         def native_backend_candidates(platform:, env:)
           case platform
           when /darwin/

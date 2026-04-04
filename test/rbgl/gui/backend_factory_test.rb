@@ -25,34 +25,34 @@ class BackendFactoryTest < Test::Unit::TestCase
     )
   end
 
-  test "native_backend_key prefers wayland when available" do
-    key = RBGL::GUI::BackendFactory.send(
-      :native_backend_key,
+  test "native_backend_candidates prefer wayland when available" do
+    candidates = RBGL::GUI::BackendFactory.send(
+      :native_backend_candidates,
       platform: "x86_64-linux",
       env: { "WAYLAND_DISPLAY" => "wayland-0", "DISPLAY" => ":0" }
     )
 
-    assert_equal :wayland, key
+    assert_equal [:wayland, :x11], candidates
   end
 
-  test "native_backend_key falls back to x11" do
-    key = RBGL::GUI::BackendFactory.send(
-      :native_backend_key,
+  test "native_backend_candidates fall back to x11" do
+    candidates = RBGL::GUI::BackendFactory.send(
+      :native_backend_candidates,
       platform: "x86_64-linux",
       env: { "DISPLAY" => ":0" }
     )
 
-    assert_equal :x11, key
+    assert_equal [:x11], candidates
   end
 
-  test "native_backend_key selects cocoa on darwin" do
-    key = RBGL::GUI::BackendFactory.send(
-      :native_backend_key,
+  test "native_backend_candidates select cocoa on darwin" do
+    candidates = RBGL::GUI::BackendFactory.send(
+      :native_backend_candidates,
       platform: "arm64-darwin",
       env: {}
     )
 
-    assert_equal :cocoa, key
+    assert_equal [:cocoa], candidates
   end
 
   test "build_auto_backend falls back from wayland to x11 when wayland init fails" do
