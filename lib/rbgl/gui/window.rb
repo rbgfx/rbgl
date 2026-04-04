@@ -24,21 +24,25 @@ module RBGL
       end
 
       def on(event_type, &block)
+        validate_event_handler!(event_type, block)
         @event_handlers[event_type] << block
       end
 
       def on_key(&block)
+        validate_event_handler!(:key, block)
         register_key_handler(:key_press, :press, &block)
         register_key_handler(:key_release, :release, &block)
       end
 
       def on_mouse(&block)
+        validate_event_handler!(:mouse, block)
         register_mouse_handler(:mouse_press, :press, &block)
         register_mouse_handler(:mouse_release, :release, &block)
         register_mouse_handler(:mouse_move, :move, &block)
       end
 
       def on_resize(&block)
+        validate_event_handler!(:resize, block)
         on(:resize) { |event| block.call(event.width, event.height) }
       end
 
@@ -117,6 +121,12 @@ module RBGL
 
       def register_mouse_handler(event_type, action, &block)
         on(event_type) { |event| block.call(event.x, event.y, event[:button], action) }
+      end
+
+      def validate_event_handler!(event_type, block)
+        return if block
+
+        raise ArgumentError, "A block is required for #{event_type} handlers"
       end
     end
   end

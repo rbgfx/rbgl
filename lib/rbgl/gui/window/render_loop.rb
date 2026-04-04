@@ -27,7 +27,9 @@ module RBGL
             last_time = current_time
 
             process_events.call
+            break if stop_requested?(backend)
             frame_callback&.call(context, delta_time)
+            break if stop_requested?(backend)
             record_present_result(backend.present(context.framebuffer))
 
             frame_count += 1
@@ -43,6 +45,12 @@ module RBGL
 
         def stop
           @running = false
+        end
+
+        private
+
+        def stop_requested?(backend)
+          !@running || backend.should_close?
         end
       end
     end

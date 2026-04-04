@@ -49,6 +49,17 @@ class WindowTest < Test::Unit::TestCase
     assert_false called
   end
 
+  test "on requires a block" do
+    window = RBGL::GUI::Window.new(
+      width: 100,
+      height: 100,
+      backend: :file,
+      output_dir: @tmpdir
+    )
+
+    assert_raise(ArgumentError) { window.on(:key_press) }
+  end
+
   test "on_key registers key event sugar on the window" do
     backend = SpyWindowBackend.new(100, 100)
     window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
@@ -61,6 +72,17 @@ class WindowTest < Test::Unit::TestCase
     assert_equal [65, :press], received
   end
 
+  test "on_key requires a block" do
+    window = RBGL::GUI::Window.new(
+      width: 100,
+      height: 100,
+      backend: :file,
+      output_dir: @tmpdir
+    )
+
+    assert_raise(ArgumentError) { window.on_key }
+  end
+
   test "on_mouse registers mouse event sugar on the window" do
     backend = SpyWindowBackend.new(100, 100)
     window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
@@ -71,6 +93,17 @@ class WindowTest < Test::Unit::TestCase
     window.send(:process_events)
 
     assert_equal [12, 24, 1, :press], received
+  end
+
+  test "on_mouse requires a block" do
+    window = RBGL::GUI::Window.new(
+      width: 100,
+      height: 100,
+      backend: :file,
+      output_dir: @tmpdir
+    )
+
+    assert_raise(ArgumentError) { window.on_mouse }
   end
 
   test "stop sets running to false" do
@@ -179,6 +212,17 @@ class WindowTest < Test::Unit::TestCase
     window.send(:process_events)
 
     assert_equal [320, 240], received
+  end
+
+  test "on_resize requires a block" do
+    window = RBGL::GUI::Window.new(
+      width: 100,
+      height: 100,
+      backend: :file,
+      output_dir: @tmpdir
+    )
+
+    assert_raise(ArgumentError) { window.on_resize }
   end
 
   test "set_pixels delegates dimensions to backend" do
@@ -305,16 +349,18 @@ end
 
 class MockLoopBackend < RBGL::GUI::Backend
   attr_reader :present_count, :poll_count, :closed
-  attr_writer :present_results
+  attr_writer :present_results, :close_after_first_poll
 
   def initialize(width, height, title = "RBGL", max_frames: 2)
     super(width, height, title)
     @present_count = 0
     @poll_count = 0
     @closed = false
+    @should_close = false
     @max_frames = max_frames
     @events = []
     @present_results = []
+    @close_after_first_poll = false
   end
 
   def present(_framebuffer)
@@ -326,11 +372,12 @@ class MockLoopBackend < RBGL::GUI::Backend
 
   def poll_events
     @poll_count += 1
+    @should_close = true if @close_after_first_poll && @poll_count == 1
     @events.shift
   end
 
   def should_close?
-    @present_count >= @max_frames
+    @should_close || @present_count >= @max_frames
   end
 
   def close
@@ -481,6 +528,25 @@ class WindowRunTest < Test::Unit::TestCase
     window.run { |_ctx, _dt| }
 
     assert_equal 1, window.dropped_frames
+  end
+
+  test "run stops before callback and present when events request close" do
+    backend = MockLoopBackend.new(100, 100, max_frames: 10)
+    backend.close_after_first_poll = true
+    window = RBGL::GUI::Window.new(
+      width: 100,
+      height: 100,
+      backend: backend
+    )
+    frame_count = 0
+
+    window.run do |_ctx, _dt|
+      frame_count += 1
+    end
+
+    assert_equal 0, frame_count
+    assert_equal 0, backend.present_count
+    assert_true backend.closed
   end
 
   test "process_events ignores non event entries" do
