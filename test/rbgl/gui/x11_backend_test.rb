@@ -250,8 +250,17 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal [nil, 0, 0], connection.send(:parse_display_name, ":0")
     assert_equal ["host", 1, 2], connection.send(:parse_display_name, "host:1.2")
 
-    assert_raise(RuntimeError) do
+    assert_raise(RBGL::GUI::BackendUnavailable) do
       connection.send(:parse_display_name, "invalid-display")
+    end
+  end
+
+  test "handshake raises backend unavailable on protocol failure" do
+    socket = FakeSocket.new("\x00" * 8)
+    connection = build_connection(socket: socket)
+
+    assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.send(:handshake)
     end
   end
 

@@ -151,7 +151,7 @@ module RBGL
             host = nil if host&.empty?
             [host, ::Regexp.last_match(2).to_i, (::Regexp.last_match(3) || 0).to_i]
           else
-            raise "Invalid display name: #{name}"
+            raise GUI::BackendUnavailable, "Invalid X11 display name: #{name}"
           end
         end
 
@@ -177,9 +177,11 @@ module RBGL
           @socket.flush
 
           header = @socket.read(8)
+          raise GUI::BackendUnavailable, "X11 connection closed during handshake" unless header&.bytesize == 8
+
           status = header.unpack1("C")
 
-          raise "X11 connection failed" unless status == 1
+          raise GUI::BackendUnavailable, "X11 connection failed" unless status == 1
 
           additional_length = header[6, 2].unpack1("v")
           data = @socket.read(additional_length * 4)
