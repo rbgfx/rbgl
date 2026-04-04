@@ -13,6 +13,7 @@ module RBGL
           super
           @connection = Connection.new
           @windows = {}
+          @dropped_frames = 0
           setup_window(width, height, title)
         end
 
@@ -39,21 +40,20 @@ module RBGL
             shm_buffer: shm_buffer,
             width: w,
             height: h,
-            should_close: false,
-            pending_events: []
+            should_close: false
           }
 
           @handle = handle
         end
 
         def present(framebuffer)
-          return unless @handle
+          return false unless @handle
 
           window = @windows[@handle]
-          return unless window
+          return false unless window
 
           buffer_object = wait_for_available_buffer(window)
-          return unless buffer_object
+          return record_dropped_frame unless buffer_object
 
           buffer = convert_to_wayland_format(framebuffer)
           buffer_object.write(buffer)
@@ -64,6 +64,7 @@ module RBGL
           window[:shm_buffer] = buffer_object
           window[:surface].commit
           @connection.flush
+          true
         end
 
         def poll_events
@@ -91,6 +92,10 @@ module RBGL
           return false unless @handle
 
           @windows[@handle]&.[](:should_close) || false
+        end
+
+        def dropped_frames
+          @dropped_frames ||= 0
         end
 
         def close
@@ -200,6 +205,11 @@ module RBGL
           tmpfile = Tempfile.new("rbgl")
           tmpfile.truncate(size)
           tmpfile
+        end
+
+        def record_dropped_frame
+          @dropped_frames = dropped_frames + 1
+          false
         end
       end
     end

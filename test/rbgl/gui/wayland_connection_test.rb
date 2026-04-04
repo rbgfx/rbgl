@@ -464,11 +464,13 @@ class WaylandBackendTest < Test::Unit::TestCase
       }
     )
 
-    backend.present(framebuffer)
+    result = backend.present(framebuffer)
 
     assert_equal 1, pump_calls
     assert_equal 1, written.size
     assert_equal [buffer], attached
+    assert_true result
+    assert_equal 0, backend.dropped_frames
   end
 
   test "present aborts when no shm buffer becomes available before timeout" do
@@ -511,11 +513,13 @@ class WaylandBackendTest < Test::Unit::TestCase
     )
     backend.define_singleton_method(:monotonic_time) { times.shift || times.last || 0.3 }
 
-    backend.present(framebuffer)
+    result = backend.present(framebuffer)
 
     assert_equal 1, pump_calls
     assert_empty written
     assert_empty attached
+    assert_false result
+    assert_equal 1, backend.dropped_frames
   end
 
   test "create_shm_buffer wraps the file, pool, and wl_buffer" do
