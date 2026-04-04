@@ -8,7 +8,7 @@ module RBGL
       def initialize(width:, height:)
         @framebuffer = Framebuffer.new(width, height)
         @rasterizer = Rasterizer.new(@framebuffer)
-        @clipper = TriangleClipper.new
+        @clipper = ClipSpaceClipper.new
         @pipeline = nil
         @uniforms = Uniforms.new
         @vertex_buffer = nil
