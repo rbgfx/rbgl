@@ -147,6 +147,22 @@ class ContextTest < Test::Unit::TestCase
     @ctx.draw_elements(:triangle_fan, 4)
   end
 
+  test "draw_arrays raises for unsupported primitive mode" do
+    setup_triangle
+
+    assert_raise(ArgumentError) do
+      @ctx.draw_arrays(:quads, 0, 4)
+    end
+  end
+
+  test "draw_elements raises for unsupported primitive mode" do
+    setup_indexed_triangle
+
+    assert_raise(ArgumentError) do
+      @ctx.draw_elements(:quads, 3)
+    end
+  end
+
   test "draw_elements caches processed vertices for repeated indices" do
     vertex_calls = 0
     pipeline = RBGL::Engine::Pipeline.create do

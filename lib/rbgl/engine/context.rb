@@ -105,6 +105,8 @@ module RBGL
           (1...vertices.size - 1).each do |index|
             yield [vertices[0], vertices[index], vertices[index + 1]]
           end
+        else
+          raise ArgumentError, "Unsupported primitive mode: #{mode}"
         end
       end
 
