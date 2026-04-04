@@ -171,6 +171,34 @@ class RasterizerTest < Test::Unit::TestCase
     assert_in_delta 0.875, result[:color].a, 0.001
   end
 
+  test "perspective_correct_weights adjusts weights by clip w" do
+    positions = [
+      Larb::Vec4.new(0.0, 0.0, 0.0, 1.0),
+      Larb::Vec4.new(0.0, 0.0, 0.0, 2.0),
+      Larb::Vec4.new(0.0, 0.0, 0.0, 4.0)
+    ]
+
+    weights = @rasterizer.send(:perspective_correct_weights, positions, [0.25, 0.25, 0.5])
+
+    assert_in_delta 0.5, weights[0], 0.001
+    assert_in_delta 0.25, weights[1], 0.001
+    assert_in_delta 0.25, weights[2], 0.001
+  end
+
+  test "interpolate_line_attributes uses perspective corrected weights" do
+    v0 = RBGL::Engine::ShaderIO.new
+    v0[:position] = Larb::Vec4.new(-0.5, 0.0, 0.0, 1.0)
+    v0[:weight] = 0.0
+
+    v1 = RBGL::Engine::ShaderIO.new
+    v1[:position] = Larb::Vec4.new(0.5, 0.0, 0.0, 2.0)
+    v1[:weight] = 1.0
+
+    result = @rasterizer.send(:interpolate_line_attributes, v0, v1, 0.5)
+
+    assert_in_delta(1.0 / 3.0, result[:weight], 0.001)
+  end
+
   private
 
   def create_vertex(x, y, z)

@@ -51,9 +51,13 @@ module RBGL
               w1 *= inv_area
               w2 *= inv_area
 
-              depth = w0 * p0.z + w1 * p1.z + w2 * p2.z
+              corrected_weights = perspective_correct_weights(
+                [v0[:position], v1[:position], v2[:position]],
+                [w0, w1, w2]
+              )
+              depth = corrected_weights[0] * p0.z + corrected_weights[1] * p1.z + corrected_weights[2] * p2.z
 
-              interpolated = interpolate_attributes(v0, v1, v2, w0, w1, w2)
+              interpolated = interpolate_attributes(v0, v1, v2, *corrected_weights)
 
               frag_output = fragment_shader.process(interpolated, uniforms)
               color = frag_output[:color]
@@ -91,7 +95,11 @@ module RBGL
           current_dist = Math.sqrt((x0 - p0.x.round)**2 + (y0 - p0.y.round)**2)
           t = total_dist > 0 ? current_dist / total_dist : 0
 
-          depth = p0.z + (p1.z - p0.z) * t
+          corrected_weights = perspective_correct_weights(
+            [v0[:position], v1[:position]],
+            [1.0 - t, t]
+          )
+          depth = corrected_weights[0] * p0.z + corrected_weights[1] * p1.z
 
           interpolated = interpolate_line_attributes(v0, v1, t)
 
@@ -199,8 +207,13 @@ module RBGL
       end
 
       def interpolate_line_attributes(v0, v1, t)
+        corrected_weights = perspective_correct_weights(
+          [v0[:position], v1[:position]],
+          [1.0 - t, t]
+        )
+
         interpolate_attribute_set([v0, v1]) do |a0, a1|
-          interpolate_value(a0, a1, a1, 1.0 - t, t, 0.0)
+          interpolate_value(a0, a1, a1, corrected_weights[0], corrected_weights[1], 0.0)
         end
       end
 
@@ -219,6 +232,23 @@ module RBGL
 
       def interpolated_keys(vertices)
         vertices.flat_map { |vertex| vertex.to_h.keys }.uniq - [:position]
+      end
+
+      def perspective_correct_weights(positions, weights)
+        corrected = positions.zip(weights).map do |position, weight|
+          weight * inverse_clip_w(position)
+        end
+        total = corrected.sum
+        return weights if total.zero?
+
+        corrected.map { |weight| weight / total }
+      end
+
+      def inverse_clip_w(position)
+        return 1.0 unless position.is_a?(Larb::Vec4)
+        return 1.0 if position.w.zero?
+
+        1.0 / position.w
       end
     end
   end
