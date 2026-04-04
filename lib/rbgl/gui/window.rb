@@ -58,7 +58,7 @@ module RBGL
 
       def present_framebuffer(framebuffer = nil)
         fb = framebuffer || @context.framebuffer
-        @backend.present(fb)
+        @render_loop.record_present_result(@backend.present(fb))
       end
 
       def set_pixels(buffer)
@@ -87,6 +87,10 @@ module RBGL
 
       def fps
         @render_loop.fps
+      end
+
+      def dropped_frames
+        @render_loop.dropped_frames
       end
 
       private

@@ -115,6 +115,17 @@ class WindowTest < Test::Unit::TestCase
     assert_equal 0, window.fps
   end
 
+  test "dropped_frames returns 0 initially" do
+    window = RBGL::GUI::Window.new(
+      width: 100,
+      height: 100,
+      backend: :file,
+      output_dir: @tmpdir
+    )
+
+    assert_equal 0, window.dropped_frames
+  end
+
   test "raises error for unknown backend" do
     assert_raise(RuntimeError) do
       RBGL::GUI::Window.new(
@@ -214,9 +225,9 @@ class WindowTest < Test::Unit::TestCase
 end
 
 class SpyWindowBackend < RBGL::GUI::Backend
-  attr_reader :presented_framebuffers, :set_pixels_args, :close_count, :key_handler, :mouse_handler, :resize_handler
+  attr_reader :presented_framebuffers, :set_pixels_args, :close_count
   attr_reader :resize_calls
-  attr_writer :should_close, :poll_events_result, :raw_events, :metal_available_value, :native_handle_value
+  attr_writer :should_close, :poll_events_result, :raw_events, :metal_available_value, :native_handle_value, :present_result
 
   def initialize(width, height, title = "RBGL")
     super(width, height, title)
@@ -228,10 +239,12 @@ class SpyWindowBackend < RBGL::GUI::Backend
     @metal_available_value = false
     @native_handle_value = nil
     @resize_calls = []
+    @present_result = true
   end
 
   def present(framebuffer)
     @presented_framebuffers << framebuffer
+    @present_result
   end
 
   def poll_events
@@ -267,21 +280,6 @@ class SpyWindowBackend < RBGL::GUI::Backend
   def native_handle
     @native_handle_value
   end
-
-  def on_key(&block)
-    @key_handler = block
-    super
-  end
-
-  def on_mouse(&block)
-    @mouse_handler = block
-    super
-  end
-
-  def on_resize(&block)
-    @resize_handler = block
-    super
-  end
 end
 
 class DetectBackendWindow < RBGL::GUI::Window
@@ -298,6 +296,7 @@ end
 
 class MockLoopBackend < RBGL::GUI::Backend
   attr_reader :present_count, :poll_count, :closed
+  attr_writer :present_results
 
   def initialize(width, height, title = "RBGL", max_frames: 2)
     super(width, height, title)
@@ -306,10 +305,14 @@ class MockLoopBackend < RBGL::GUI::Backend
     @closed = false
     @max_frames = max_frames
     @events = []
+    @present_results = []
   end
 
   def present(_framebuffer)
     @present_count += 1
+    return true if @present_results.empty?
+
+    @present_results.shift
   end
 
   def poll_events
@@ -411,6 +414,20 @@ class WindowRunTest < Test::Unit::TestCase
 
     window.run
     assert_equal 2, backend.present_count
+  end
+
+  test "run tracks dropped frames when present returns false" do
+    backend = MockLoopBackend.new(100, 100, max_frames: 3)
+    backend.present_results = [true, false, true]
+    window = RBGL::GUI::Window.new(
+      width: 100,
+      height: 100,
+      backend: backend
+    )
+
+    window.run { |_ctx, _dt| }
+
+    assert_equal 1, window.dropped_frames
   end
 
   test "process_events ignores non event entries" do

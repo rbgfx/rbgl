@@ -4,11 +4,12 @@ module RBGL
   module GUI
     class Window
       class RenderLoop
-        attr_reader :fps
+        attr_reader :fps, :dropped_frames
 
         def initialize(time_source: -> { Time.now })
           @time_source = time_source
           @fps = 0
+          @dropped_frames = 0
           @running = false
         end
 
@@ -25,12 +26,17 @@ module RBGL
 
             process_events.call
             frame_callback&.call(context, delta_time)
-            backend.present(context.framebuffer)
+            record_present_result(backend.present(context.framebuffer))
 
             frame_count += 1
             elapsed = current_time - start_time
             @fps = frame_count / elapsed if elapsed.positive?
           end
+        end
+
+        def record_present_result(result)
+          @dropped_frames += 1 if result == false
+          result
         end
 
         def stop
