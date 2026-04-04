@@ -93,6 +93,16 @@ class TextureTest < Test::Unit::TestCase
     assert_kind_of Larb::Color, color
   end
 
+  test "wrap setters reject unsupported modes" do
+    assert_raise(ArgumentError) { @tex.wrap_s = :invalid }
+    assert_raise(ArgumentError) { @tex.wrap_t = :invalid }
+  end
+
+  test "filter setters reject unsupported modes" do
+    assert_raise(ArgumentError) { @tex.filter_min = :invalid }
+    assert_raise(ArgumentError) { @tex.filter_mag = :invalid }
+  end
+
   test "sample uses magnification filter when lod is zero" do
     tex = RBGL::Engine::Texture.new(2, 2)
     tex.set_pixel(0, 0, Larb::Color.rgb(1.0, 0.0, 0.0))

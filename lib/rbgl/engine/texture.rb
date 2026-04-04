@@ -4,9 +4,10 @@ module RBGL
   module Engine
     class Texture
       PPM_HEADER = /\A(P[36])(?:\s+|#[^\n]*\n)+(\d+)(?:\s+|#[^\n]*\n)+(\d+)(?:\s+|#[^\n]*\n)+(\d+)\s/m
+      WRAP_MODES = %i[repeat clamp mirror].freeze
+      FILTER_MODES = %i[nearest linear].freeze
 
-      attr_reader :width, :height, :data
-      attr_accessor :wrap_s, :wrap_t, :filter_min, :filter_mag
+      attr_reader :width, :height, :data, :wrap_s, :wrap_t, :filter_min, :filter_mag
 
       WRAP_REPEAT = :repeat
       WRAP_CLAMP = :clamp
@@ -54,6 +55,22 @@ module RBGL
       def generate_mipmaps!
         rebuild_mipmap_chain!
         self
+      end
+
+      def wrap_s=(mode)
+        @wrap_s = validate_wrap_mode!(mode)
+      end
+
+      def wrap_t=(mode)
+        @wrap_t = validate_wrap_mode!(mode)
+      end
+
+      def filter_min=(filter)
+        @filter_min = validate_filter_mode!(filter)
+      end
+
+      def filter_mag=(filter)
+        @filter_mag = validate_filter_mode!(filter)
       end
 
       def self.from_ppm(filename)
@@ -147,6 +164,20 @@ module RBGL
         end
       end
 
+      def validate_wrap_mode!(mode)
+        normalized = mode.to_sym
+        return normalized if WRAP_MODES.include?(normalized)
+
+        raise ArgumentError, "Unsupported wrap mode: #{mode}"
+      end
+
+      def validate_filter_mode!(mode)
+        normalized = mode.to_sym
+        return normalized if FILTER_MODES.include?(normalized)
+
+        raise ArgumentError, "Unsupported filter mode: #{mode}"
+      end
+
       def sample_nearest(level, x, y)
         pixel_for_level(level, x.round, y.round)
       end
@@ -159,8 +190,10 @@ module RBGL
         case filter
         when FILTER_NEAREST
           sample_nearest(level, x, y)
-        else
+        when FILTER_LINEAR
           sample_bilinear(level, x, y)
+        else
+          raise ArgumentError, "Unsupported filter mode: #{filter}"
         end
       end
 
