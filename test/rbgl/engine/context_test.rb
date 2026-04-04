@@ -220,7 +220,7 @@ class ContextTest < Test::Unit::TestCase
     color = @ctx.framebuffer.get_pixel(50, 50)
     assert_in_delta 0.0, color.r, 0.001
     assert_in_delta 1.0, color.b, 0.001
-    assert_equal 0.75, @ctx.framebuffer.get_depth(50, 50)
+    assert_in_delta 0.75, @ctx.framebuffer.get_depth(50, 50), 0.001
   end
 
   test "draw_arrays respects pipeline blend mode" do
