@@ -103,7 +103,7 @@ class BackendFactoryTest < Test::Unit::TestCase
     assert_equal [:wayland, :x11], calls
   end
 
-  test "build_auto_backend raises when every native backend fails" do
+  test "build_auto_backend raises when every auto backend fails" do
     builder = lambda do |_backend, **|
       raise Errno::ECONNREFUSED, "cannot connect"
     end
@@ -151,6 +151,12 @@ class BackendFactoryTest < Test::Unit::TestCase
   test "build raises for unknown backend" do
     assert_raise(RBGL::GUI::BackendSelectionError) do
       RBGL::GUI::BackendFactory.build(:unknown, width: 1, height: 1, title: "Test")
+    end
+  end
+
+  test "build raises for removed native backend alias" do
+    assert_raise(RBGL::GUI::BackendSelectionError) do
+      RBGL::GUI::BackendFactory.build(:native, width: 1, height: 1, title: "Test")
     end
   end
 

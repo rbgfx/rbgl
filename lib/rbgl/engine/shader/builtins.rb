@@ -67,7 +67,6 @@ module RBGL
         when Larb::Color then a.lerp(b, t)
         end
       end
-      alias lerp mix
 
       def clamp(v, min_val, max_val)
         case v

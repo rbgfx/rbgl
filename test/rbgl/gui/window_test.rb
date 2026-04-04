@@ -60,52 +60,6 @@ class WindowTest < Test::Unit::TestCase
     assert_raise(ArgumentError) { window.on(:key_press) }
   end
 
-  test "on_key registers key event sugar on the window" do
-    backend = SpyWindowBackend.new(100, 100)
-    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
-    backend.poll_events_result = [RBGL::GUI::Event.new(:key_press, key: 65)]
-    received = nil
-
-    window.on_key { |key, action| received = [key, action] }
-    window.send(:process_events)
-
-    assert_equal [65, :press], received
-  end
-
-  test "on_key requires a block" do
-    window = RBGL::GUI::Window.new(
-      width: 100,
-      height: 100,
-      backend: :file,
-      output_dir: @tmpdir
-    )
-
-    assert_raise(ArgumentError) { window.on_key }
-  end
-
-  test "on_mouse registers mouse event sugar on the window" do
-    backend = SpyWindowBackend.new(100, 100)
-    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
-    backend.poll_events_result = [RBGL::GUI::Event.new(:mouse_press, x: 12, y: 24, button: 1)]
-    received = nil
-
-    window.on_mouse { |x, y, button, action| received = [x, y, button, action] }
-    window.send(:process_events)
-
-    assert_equal [12, 24, 1, :press], received
-  end
-
-  test "on_mouse requires a block" do
-    window = RBGL::GUI::Window.new(
-      width: 100,
-      height: 100,
-      backend: :file,
-      output_dir: @tmpdir
-    )
-
-    assert_raise(ArgumentError) { window.on_mouse }
-  end
-
   test "stop sets running to false" do
     window = RBGL::GUI::Window.new(
       width: 100,
@@ -193,36 +147,6 @@ class WindowTest < Test::Unit::TestCase
 
     assert_equal [[:auto, 120, 80, "Auto"]], window.build_backend_calls
     assert_kind_of SpyWindowBackend, window.backend
-  end
-
-  test "uses detect_backend for native backend" do
-    window = DetectBackendWindow.new(width: 90, height: 60, title: "Native", backend: :native)
-
-    assert_equal [[:native, 90, 60, "Native"]], window.build_backend_calls
-    assert_kind_of SpyWindowBackend, window.backend
-  end
-
-  test "on_resize registers resize event sugar on the window" do
-    backend = SpyWindowBackend.new(100, 100)
-    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
-    backend.poll_events_result = [RBGL::GUI::Event.new(:resize, width: 320, height: 240)]
-    received = nil
-
-    window.on_resize { |width, height| received = [width, height] }
-    window.send(:process_events)
-
-    assert_equal [320, 240], received
-  end
-
-  test "on_resize requires a block" do
-    window = RBGL::GUI::Window.new(
-      width: 100,
-      height: 100,
-      backend: :file,
-      output_dir: @tmpdir
-    )
-
-    assert_raise(ArgumentError) { window.on_resize }
   end
 
   test "set_pixels delegates dimensions to backend" do
@@ -486,7 +410,7 @@ class WindowRunTest < Test::Unit::TestCase
     assert_equal :key_press, received_events[0].type
   end
 
-  test "process_events dispatches backend callbacks from window events" do
+  test "process_events dispatches window event objects" do
     backend = MockLoopBackend.new(100, 100, max_frames: 1)
     window = RBGL::GUI::Window.new(
       width: 100,
@@ -497,11 +421,11 @@ class WindowRunTest < Test::Unit::TestCase
     backend.add_events([[RBGL::GUI::Event.new(:key_press, key: 65)]])
 
     received = nil
-    window.on_key { |key, action| received = [key, action] }
+    window.on(:key_press) { |event| received = [event.key, event.type] }
 
     window.run { |_ctx, _dt| }
 
-    assert_equal [65, :press], received
+    assert_equal [65, :key_press], received
   end
 
   test "run with nil frame callback" do
@@ -582,7 +506,9 @@ class WindowRunTest < Test::Unit::TestCase
     window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
 
     callback_dims = nil
-    window.on_resize { |width, height| callback_dims = [width, height, window.width, window.height] }
+    window.on(:resize) do |event|
+      callback_dims = [event.width, event.height, window.width, window.height]
+    end
 
     window.send(:process_events)
 

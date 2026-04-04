@@ -8,7 +8,7 @@ module RBGL
       class << self
         def build(backend, width:, height:, title:, platform: RUBY_PLATFORM, env: ENV, **options)
           case backend
-          when :auto, :native
+          when :auto
             build_auto_backend(
               width: width,
               height: height,
