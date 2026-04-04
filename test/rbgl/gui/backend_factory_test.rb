@@ -78,6 +78,29 @@ class BackendFactoryTest < Test::Unit::TestCase
     assert_equal [:wayland, :x11], calls
   end
 
+  test "build_auto_backend falls back from wayland when globals are unavailable" do
+    calls = []
+    builder = lambda do |backend, **|
+      calls << backend
+      raise RBGL::GUI::BackendUnavailable, "missing globals" if backend == :wayland
+
+      backend
+    end
+
+    backend = RBGL::GUI::BackendFactory.send(
+      :build_auto_backend,
+      width: 64,
+      height: 48,
+      title: "Test",
+      platform: "x86_64-linux",
+      env: { "WAYLAND_DISPLAY" => "wayland-0", "DISPLAY" => ":0" },
+      builder: builder
+    )
+
+    assert_equal :x11, backend
+    assert_equal [:wayland, :x11], calls
+  end
+
   test "build_auto_backend raises when every native backend fails" do
     builder = lambda do |_backend, **|
       raise Errno::ECONNREFUSED, "cannot connect"

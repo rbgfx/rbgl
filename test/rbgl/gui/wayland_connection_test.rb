@@ -161,6 +161,29 @@ class WaylandConnectionTest < Test::Unit::TestCase
     assert_equal 13, connection.xdg_wm_base.id
   end
 
+  test "bind_globals raises when required globals are missing" do
+    registry = SpyRegistry.new(7, [11, 12, 13])
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    connection.instance_variable_set(:@registry, registry)
+    connection.instance_variable_set(
+      :@globals,
+      {
+        "wl_compositor" => { name: 1, version: 5 },
+        "wl_shm" => { name: 2, version: 1 }
+      }
+    )
+    connection.instance_variable_set(:@objects, { registry.id => registry })
+
+    connection.define_singleton_method(:flush) {}
+    connection.define_singleton_method(:roundtrip) {}
+
+    error = assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.send(:bind_globals)
+    end
+
+    assert_includes error.message, "xdg_wm_base"
+  end
+
   test "handle_event queues toplevel close events" do
     connection = RBGL::GUI::Wayland::Connection.allocate
     toplevel = RBGL::GUI::Wayland::XdgToplevel.allocate
