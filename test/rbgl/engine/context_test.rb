@@ -224,6 +224,30 @@ class ContextTest < Test::Unit::TestCase
     })
   end
 
+  test "clip_line keeps partially visible lines and returns clipped segment" do
+    v0 = shader_vertex(Larb::Vec4.new(-1.5, 0.0, 0.0, 1.0))
+    v1 = shader_vertex(Larb::Vec4.new(0.5, 0.0, 0.0, 1.0))
+
+    clipped = @ctx.send(:clip_line, v0, v1)
+
+    assert_not_nil clipped
+    assert_equal 2, clipped.size
+    assert(clipped.all? do |vertex|
+      position = vertex[:position]
+      position.x.abs <= position.w + 1e-6 &&
+        position.y.abs <= position.w + 1e-6 &&
+        position.z.abs <= position.w + 1e-6
+    end)
+  end
+
+  test "point_visible? rejects points outside the frustum" do
+    inside = shader_vertex(Larb::Vec4.new(0.0, 0.0, 0.0, 1.0))
+    outside = shader_vertex(Larb::Vec4.new(2.0, 0.0, 0.0, 1.0))
+
+    assert_true @ctx.send(:point_visible?, inside)
+    assert_false @ctx.send(:point_visible?, outside)
+  end
+
   test "draw_arrays clips triangles crossing the view frustum" do
     @ctx.bind_pipeline(@pipeline)
     @vb.add_vertex(position: Larb::Vec4.new(-0.5, 0.0, 0.0, 1.0), color: Larb::Color.new(1, 0, 0, 1))
@@ -235,6 +259,28 @@ class ContextTest < Test::Unit::TestCase
 
     color = @ctx.framebuffer.get_pixel(60, 35)
     assert (color.r + color.g + color.b).positive?
+  end
+
+  test "draw_arrays clips lines crossing the view frustum" do
+    @ctx.bind_pipeline(@pipeline)
+    @vb.add_vertex(position: Larb::Vec4.new(-1.5, 0.0, 0.0, 1.0), color: Larb::Color.new(1, 1, 1, 1))
+    @vb.add_vertex(position: Larb::Vec4.new(0.5, 0.0, 0.0, 1.0), color: Larb::Color.new(1, 1, 1, 1))
+    @ctx.bind_vertex_buffer(@vb)
+
+    @ctx.draw_arrays(:lines, 0, 2)
+
+    color = @ctx.framebuffer.get_pixel(40, 50)
+    assert (color.r + color.g + color.b).positive?
+  end
+
+  test "draw_arrays rejects points outside the view frustum" do
+    @ctx.bind_pipeline(@pipeline)
+    @vb.add_vertex(position: Larb::Vec4.new(2.0, 0.0, 0.0, 1.0), color: Larb::Color.new(1, 1, 1, 1))
+    @ctx.bind_vertex_buffer(@vb)
+
+    @ctx.draw_arrays(:points, 0, 1)
+
+    assert_equal 0, colored_pixel_count
   end
 
   test "draw_arrays respects pipeline depth_test setting" do
@@ -338,5 +384,14 @@ class ContextTest < Test::Unit::TestCase
     vertex[:position] = position
     vertex[:color] = color
     vertex
+  end
+
+  def colored_pixel_count
+    @ctx.height.times.sum do |y|
+      @ctx.width.times.count do |x|
+        color = @ctx.framebuffer.get_pixel(x, y)
+        (color.r + color.g + color.b).positive?
+      end
+    end
   end
 end

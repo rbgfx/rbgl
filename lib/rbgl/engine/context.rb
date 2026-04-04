@@ -8,7 +8,7 @@ module RBGL
       def initialize(width:, height:)
         @framebuffer = Framebuffer.new(width, height)
         @rasterizer = Rasterizer.new(@framebuffer)
-        @triangle_clipper = TriangleClipper.new
+        @clipper = TriangleClipper.new
         @pipeline = nil
         @uniforms = Uniforms.new
         @vertex_buffer = nil
@@ -162,22 +162,32 @@ module RBGL
 
       def draw_line(v0, v1)
         return unless v0 && v1
+        clipped = clip_line(v0, v1)
+        return unless clipped
 
-        @rasterizer.rasterize_line(v0, v1, @pipeline.fragment_shader, @uniforms, **rasterizer_state)
+        @rasterizer.rasterize_line(*clipped, @pipeline.fragment_shader, @uniforms, **rasterizer_state)
       end
 
       def draw_point(v)
-        return unless v
+        return unless v && point_visible?(v)
 
         @rasterizer.rasterize_point(v, @pipeline.fragment_shader, @uniforms, **rasterizer_state)
       end
 
       def clip_triangle(v0, v1, v2)
-        @triangle_clipper.clip(v0, v1, v2)
+        @clipper.clip(v0, v1, v2)
+      end
+
+      def clip_line(v0, v1)
+        @clipper.clip_line(v0, v1)
       end
 
       def clip_triangle?(v0, v1, v2)
         clip_triangle(v0, v1, v2).empty?
+      end
+
+      def point_visible?(vertex)
+        @clipper.visible_point?(vertex)
       end
 
       def rasterizer_state
