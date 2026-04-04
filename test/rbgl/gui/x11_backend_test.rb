@@ -281,13 +281,11 @@ class X11ConnectionTest < Test::Unit::TestCase
   test "send_request and send_request_with_data write padded packets" do
     socket = FakeSocket.new
     connection = build_connection(socket: socket)
-    connection.instance_variable_set(:@next_seq, 1)
 
     connection.send(:send_request, 10, "abc", 2)
     connection.send(:send_request_with_data, 11, 3, "head", "body")
 
     assert_equal 2, socket.writes.size
-    assert_equal 3, connection.instance_variable_get(:@next_seq)
     assert_equal 8, socket.writes[0].bytesize
     assert_equal 12, socket.writes[1].bytesize
   end
@@ -368,7 +366,6 @@ class X11ConnectionTest < Test::Unit::TestCase
     connection = RBGL::GUI::X11::Connection.allocate
     connection.instance_variable_set(:@socket, socket)
     connection.instance_variable_set(:@pending_events, [])
-    connection.instance_variable_set(:@next_seq, 1)
     connection
   end
 end

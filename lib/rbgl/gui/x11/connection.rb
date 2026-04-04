@@ -18,7 +18,6 @@ module RBGL
           host, display_num, _screen_num = parse_display_name(display_name)
           @socket = connect(host, display_num)
           @transport = Transport.new(@socket)
-          @next_seq = 1
           @resource_id_counter = 0
           @pending_events = []
 
@@ -209,12 +208,10 @@ module RBGL
 
         def send_request(opcode, data, extra = 0)
           transport.write(request_encoder.request_packet(opcode, data, extra))
-          @next_seq += 1
         end
 
         def send_request_with_data(opcode, extra, header_data, bulk_data)
           transport.write(request_encoder.request_packet_with_data(opcode, extra, header_data, bulk_data))
-          @next_seq += 1
         end
 
         def read_reply
