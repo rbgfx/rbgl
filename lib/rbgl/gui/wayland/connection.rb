@@ -10,10 +10,15 @@ module RBGL
   module GUI
     module Wayland
       class Connection
+        DEFAULT_ROUNDTRIP_TIMEOUT = 1.0
+        ROUNDTRIP_POLL_INTERVAL = 0.01
+
         attr_reader :compositor, :shm, :xdg_wm_base, :registry, :globals
 
-        def initialize
-          @socket = UNIXSocket.new(resolve_socket_path)
+        def initialize(env: ENV, socket_path: nil, roundtrip_timeout: DEFAULT_ROUNDTRIP_TIMEOUT)
+          @env = env
+          @roundtrip_timeout = roundtrip_timeout
+          @socket = UNIXSocket.new(resolve_socket_path(socket_path))
           @objects = {}
           @next_id = 2
           @globals = {}
@@ -101,20 +106,31 @@ module RBGL
           callback = @display.sync
           @objects[callback.id] = callback
           flush
+          deadline = monotonic_time + @roundtrip_timeout
 
           until callback.done?
-            pump_events(timeout: 0.01)
+            raise BackendUnavailable, "Wayland roundtrip timed out" if monotonic_time >= deadline
+
+            pump_events(timeout: roundtrip_poll_interval(deadline))
           end
         end
 
         private
 
-        def resolve_socket_path
-          socket_path = ENV["WAYLAND_DISPLAY"] || "wayland-0"
+        def resolve_socket_path(socket_path = nil)
+          socket_path ||= @env["WAYLAND_DISPLAY"] || "wayland-0"
           return socket_path if socket_path.start_with?("/")
 
-          runtime_dir = ENV["XDG_RUNTIME_DIR"] || "/run/user/#{Process.uid}"
+          runtime_dir = @env["XDG_RUNTIME_DIR"] || "/run/user/#{Process.uid}"
           File.join(runtime_dir, socket_path)
+        end
+
+        def roundtrip_poll_interval(deadline)
+          [deadline - monotonic_time, ROUNDTRIP_POLL_INTERVAL].min.clamp(0.0, ROUNDTRIP_POLL_INTERVAL)
+        end
+
+        def monotonic_time
+          Process.clock_gettime(Process::CLOCK_MONOTONIC)
         end
 
         def handle_event(object_id, opcode, payload)

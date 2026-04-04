@@ -279,6 +279,52 @@ class WaylandConnectionTest < Test::Unit::TestCase
 
     assert_equal expected, packed
   end
+
+  test "resolve_socket_path uses injected env values" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    connection.instance_variable_set(:@env, {
+      "WAYLAND_DISPLAY" => "wayland-test",
+      "XDG_RUNTIME_DIR" => "/tmp/rbgl-wayland"
+    })
+
+    path = connection.send(:resolve_socket_path)
+
+    assert_equal "/tmp/rbgl-wayland/wayland-test", path
+  end
+
+  test "resolve_socket_path keeps absolute socket paths" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    connection.instance_variable_set(:@env, {})
+
+    path = connection.send(:resolve_socket_path, "/tmp/custom-wayland.sock")
+
+    assert_equal "/tmp/custom-wayland.sock", path
+  end
+
+  test "roundtrip raises when callback is not completed before timeout" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    callback = Object.new
+    callback.define_singleton_method(:id) { 10 }
+    callback.define_singleton_method(:done?) { false }
+    display = Object.new
+    display.define_singleton_method(:sync) { callback }
+    pump_calls = 0
+    times = [0.0, 0.0, 0.03, 0.03]
+
+    connection.instance_variable_set(:@display, display)
+    connection.instance_variable_set(:@objects, {})
+    connection.instance_variable_set(:@roundtrip_timeout, 0.02)
+    connection.define_singleton_method(:flush) {}
+    connection.define_singleton_method(:pump_events) { |timeout:| pump_calls += 1; timeout }
+    connection.define_singleton_method(:monotonic_time) { times.shift || 0.03 }
+
+    assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.roundtrip
+    end
+
+    assert_equal callback, connection.instance_variable_get(:@objects)[10]
+    assert_equal 1, pump_calls
+  end
 end
 
 class WaylandBackendTest < Test::Unit::TestCase

@@ -11,7 +11,8 @@ module RBGL
       end
 
       class Backend < GUI::Backend
-        def initialize(width, height, title = "RBGL")
+        def initialize(width, height, title = "RBGL", env: ENV)
+          @env = env
           unless METACO_AVAILABLE
             raise LoadError, "metaco gem is required for Cocoa backend. Install it with: gem install metaco"
           end

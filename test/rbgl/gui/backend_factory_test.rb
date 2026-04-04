@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative "../../test_helper"
+require "rbgl/gui/x11/backend"
+require "rbgl/gui/wayland/backend"
 
 class BackendFactoryTest < Test::Unit::TestCase
   test "build creates file backend" do
@@ -150,5 +152,69 @@ class BackendFactoryTest < Test::Unit::TestCase
     assert_raise(RBGL::GUI::BackendSelectionError) do
       RBGL::GUI::BackendFactory.build(:unknown, width: 1, height: 1, title: "Test")
     end
+  end
+
+  test "build_specific_backend forwards env to X11 backend" do
+    env = { "DISPLAY" => ":42" }
+    backend_class = RBGL::GUI::X11::Backend.singleton_class
+    backup = :__rbgl_x11_backend_new_for_test__
+    calls = []
+    fake_backend = Object.new
+
+    backend_class.send(:alias_method, backup, :new)
+    backend_class.send(:define_method, :new) do |*args, **kwargs|
+      calls << [args, kwargs]
+      fake_backend
+    end
+
+    result = RBGL::GUI::BackendFactory.send(
+      :build_specific_backend,
+      :x11,
+      width: 64,
+      height: 48,
+      title: "Test",
+      env: env
+    )
+
+    assert_same fake_backend, result
+    assert_equal env, calls.first[1][:env]
+  ensure
+    next unless backend_class&.method_defined?(backup)
+
+    backend_class.send(:remove_method, :new)
+    backend_class.send(:alias_method, :new, backup)
+    backend_class.send(:remove_method, backup)
+  end
+
+  test "build_specific_backend forwards env to Wayland backend" do
+    env = { "WAYLAND_DISPLAY" => "wayland-42", "XDG_RUNTIME_DIR" => "/tmp/runtime" }
+    backend_class = RBGL::GUI::Wayland::Backend.singleton_class
+    backup = :__rbgl_wayland_backend_new_for_test__
+    calls = []
+    fake_backend = Object.new
+
+    backend_class.send(:alias_method, backup, :new)
+    backend_class.send(:define_method, :new) do |*args, **kwargs|
+      calls << [args, kwargs]
+      fake_backend
+    end
+
+    result = RBGL::GUI::BackendFactory.send(
+      :build_specific_backend,
+      :wayland,
+      width: 64,
+      height: 48,
+      title: "Test",
+      env: env
+    )
+
+    assert_same fake_backend, result
+    assert_equal env, calls.first[1][:env]
+  ensure
+    next unless backend_class&.method_defined?(backup)
+
+    backend_class.send(:remove_method, :new)
+    backend_class.send(:alias_method, :new, backup)
+    backend_class.send(:remove_method, backup)
   end
 end
