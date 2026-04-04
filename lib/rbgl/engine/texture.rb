@@ -104,7 +104,7 @@ module RBGL
         width = match[2].to_i
         height = match[3].to_i
         max_val = match[4].to_i
-        raise ArgumentError, "Unsupported PPM max value: #{max_val}" unless max_val.positive?
+        raise ArgumentError, "Unsupported PPM max value: #{max_val}" unless max_val.between?(1, 65_535)
 
         [format, width, height, max_val, match.end(0)]
       end

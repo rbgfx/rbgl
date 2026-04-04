@@ -62,7 +62,7 @@ class FileBackendTest < Test::Unit::TestCase
   test "present with binary PPM format" do
     backend = RBGL::GUI::FileBackend.new(10, 10, "Test", format: :ppm_binary, output_dir: @tmpdir)
     backend.present(@fb)
-    assert File.exist?(File.join(@tmpdir, "frame_00000.ppm_binary"))
+    assert File.exist?(File.join(@tmpdir, "frame_00000.ppm"))
   end
 
   test "present with BMP format" do

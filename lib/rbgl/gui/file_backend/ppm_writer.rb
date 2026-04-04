@@ -9,7 +9,7 @@ module RBGL
         end
 
         def extension
-          @binary ? "ppm_binary" : "ppm"
+          "ppm"
         end
 
         def write(filename, framebuffer)

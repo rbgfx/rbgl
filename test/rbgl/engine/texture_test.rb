@@ -230,4 +230,21 @@ class TextureTest < Test::Unit::TestCase
       assert_in_delta 0.0, green_pixel.b, 0.01
     end
   end
+
+  test "from_ppm rejects max values above 65535" do
+    Dir.mktmpdir do |tmpdir|
+      ppm_file = File.join(tmpdir, "bad.ppm")
+      ppm_content = <<~PPM
+        P3
+        1 1
+        70000
+        0 0 0
+      PPM
+      File.write(ppm_file, ppm_content)
+
+      assert_raise(ArgumentError) do
+        RBGL::Engine::Texture.from_ppm(ppm_file)
+      end
+    end
+  end
 end
