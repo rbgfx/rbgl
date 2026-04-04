@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 require "socket"
+require_relative "atom_cache"
+require_relative "event_parser"
+require_relative "request_encoder"
+require_relative "transport"
 
 module RBGL
   module GUI
@@ -12,6 +16,7 @@ module RBGL
         def initialize(display_name)
           host, display_num, _screen_num = parse_display_name(display_name)
           @socket = connect(host, display_num)
+          @transport = Transport.new(@socket)
           @next_seq = 1
           @resource_id_counter = 0
           @pending_events = []
@@ -26,16 +31,11 @@ module RBGL
         end
 
         def flush
-          @socket.flush
+          transport.flush
         end
 
         def atom(name)
-          @atom_cache ||= {
-            wm_name: 39,
-            string: 31,
-            atom: 4
-          }
-          @atom_cache[name] ||= resolve_atom(name)
+          atom_cache.fetch(name)
         end
 
         def wm_delete_window_atom
@@ -51,56 +51,25 @@ module RBGL
         end
 
         def pending
-          ready = IO.select([@socket], nil, nil, 0)
-          ready ? 1 : 0
+          transport.pending
         end
 
         def create_window(depth:, wid:, parent:, x:, y:, width:, height:,
                           border_width:, window_class:, visual:, value_mask:, values:)
-          class_val = case window_class
-                      when :input_output then 1
-                      when :input_only then 2
-                      else 0
-                      end
-
-          mask = 0
-          value_list = []
-
-          if value_mask.include?(:back_pixel)
-            mask |= 0x0002
-            value_list << values[:back_pixel]
-          end
-
-          if value_mask.include?(:event_mask)
-            mask |= 0x0800
-            event_mask = 0
-            values[:event_mask].each do |ev|
-              event_mask |= case ev
-                            when :exposure then 0x8000
-                            when :key_press then 0x0001
-                            when :key_release then 0x0002
-                            when :button_press then 0x0004
-                            when :button_release then 0x0008
-                            when :pointer_motion then 0x0040
-                            when :structure_notify then 0x020000
-                            else 0
-                            end
-            end
-            value_list << event_mask
-          end
-
-          request = [
-            depth,
-            wid,
-            parent,
-            x, y,
-            width, height,
-            border_width,
-            class_val,
-            visual,
-            mask
-          ].pack("CVVSSSSSVV") + value_list.pack("V*")
-
+          request = request_encoder.create_window_data(
+            depth: depth,
+            wid: wid,
+            parent: parent,
+            x: x,
+            y: y,
+            width: width,
+            height: height,
+            border_width: border_width,
+            window_class: window_class,
+            visual: visual,
+            value_mask: value_mask,
+            values: values
+          )
           send_request(1, request)
         end
 
@@ -113,74 +82,41 @@ module RBGL
         end
 
         def create_gc(gc_id, drawable, values = {})
-          mask = 0
-          value_list = []
-
-          if values[:foreground]
-            mask |= 0x0004
-            value_list << values[:foreground]
-          end
-
-          if values[:background]
-            mask |= 0x0008
-            value_list << values[:background]
-          end
-
-          request = [gc_id, drawable, mask].pack("VVV") + value_list.pack("V*")
+          request = request_encoder.create_gc_data(gc_id, drawable, values)
           send_request(55, request)
         end
 
         def put_image(format:, drawable:, gc:, width:, height:, dst_x:, dst_y:, depth:, data:)
-          format_byte = case format
-                        when :bitmap then 0
-                        when :xy_pixmap then 1
-                        when :z_pixmap then 2
-                        else 2
-                        end
-
-          left_pad = 0
-
-          header = [
-            drawable,
-            gc,
-            width, height,
-            dst_x, dst_y,
-            left_pad,
-            depth
-          ].pack("VVvvvvCC") + "\x00\x00"
-
-          send_request_with_data(72, format_byte, header, data)
+          format_byte, header, image_data = request_encoder.put_image_data(
+            format: format,
+            drawable: drawable,
+            gc: gc,
+            width: width,
+            height: height,
+            dst_x: dst_x,
+            dst_y: dst_y,
+            depth: depth,
+            data: data
+          )
+          send_request_with_data(72, format_byte, header, image_data)
         end
 
         def change_property(window, property, type, data, mode: :replace, format: 8)
-          mode_val = case mode
-                     when :replace then 0
-                     when :prepend then 1
-                     when :append then 2
-                     else 0
-                     end
-
           property_atom = atom(property)
           type_atom = atom(type)
-          data_bytes, value_count = pack_property_data(data, format)
-
-          request = [
+          mode_val, request = request_encoder.change_property_data(
             window,
             property_atom,
             type_atom,
-            format,
-            value_count
-          ].pack("VVVCV") + "\x00\x00\x00" + pad_to_4(data_bytes)
-
+            data,
+            mode: mode,
+            format: format
+          )
           send_request(18, request, mode_val)
         end
 
         def intern_atom(name, only_if_exists: false)
-          request = [
-            name.bytesize,
-            0
-          ].pack("vv") + pad_to_4(name)
-
+          request = request_encoder.intern_atom_data(name)
           send_request(16, request, only_if_exists ? 1 : 0)
           flush
 
@@ -268,83 +204,29 @@ module RBGL
         end
 
         def send_request(opcode, data, extra = 0)
-          length = (4 + data.bytesize + 3) / 4
-          header = [opcode, extra, length].pack("CCv")
-
-          padding_size = length * 4 - 4 - data.bytesize
-          padded_data = data + ("\x00" * padding_size)
-
-          @socket.write(header + padded_data)
+          transport.write(request_encoder.request_packet(opcode, data, extra))
           @next_seq += 1
         end
 
         def send_request_with_data(opcode, extra, header_data, bulk_data)
-          total_data = header_data + bulk_data
-          length = (4 + total_data.bytesize + 3) / 4
-
-          header = [opcode, extra, length].pack("CCv")
-          padding_size = length * 4 - 4 - total_data.bytesize
-          padded = total_data + ("\x00" * padding_size)
-
-          @socket.write(header + padded)
+          transport.write(request_encoder.request_packet_with_data(opcode, extra, header_data, bulk_data))
           @next_seq += 1
         end
 
         def read_reply
-          header = @socket.read(32)
+          header = transport.read(32)
           return nil unless header && header.bytesize == 32
 
           additional = header[4, 4].unpack1("V")
           if additional > 0
-            header + @socket.read(additional * 4)
+            header + transport.read(additional * 4)
           else
             header
           end
         end
 
         def read_event
-          data = @socket.read(32)
-          return nil unless data && data.bytesize == 32
-
-          event_type = data.unpack1("C") & 0x7F
-
-          case event_type
-          when 2
-            keycode = data[1, 1].unpack1("C")
-            { type: :key_press, keycode: keycode }
-          when 3
-            keycode = data[1, 1].unpack1("C")
-            { type: :key_release, keycode: keycode }
-          when 4
-            x, y = data[24, 4].unpack("ss")
-            button = data[1, 1].unpack1("C")
-            { type: :button_press, x: x, y: y, button: button }
-          when 5
-            x, y = data[24, 4].unpack("ss")
-            button = data[1, 1].unpack1("C")
-            { type: :button_release, x: x, y: y, button: button }
-          when 6
-            x, y = data[24, 4].unpack("ss")
-            { type: :motion_notify, x: x, y: y }
-          when 12
-            { type: :exposure }
-          when 22
-            width, height = data[20, 4].unpack("vv")
-            { type: :configure_notify, width: width, height: height }
-          when 33
-            format = data[1, 1].unpack1("C")
-            window = data[4, 4].unpack1("V")
-            message_type = data[8, 4].unpack1("V")
-            {
-              type: :client_message,
-              format: format,
-              window: window,
-              message_type: message_type,
-              data32: data[12, 20].unpack("V5")
-            }
-          else
-            { type: :unknown, code: event_type }
-          end
+          event_parser.parse(transport.read(32))
         end
 
         def resolve_atom(name)
@@ -360,28 +242,33 @@ module RBGL
         end
 
         def pack_property_data(data, format)
-          case format
-          when 8
-            bytes = data.to_s
-            [bytes, bytes.bytesize]
-          when 16
-            values = Array(data)
-            [values.pack("v*"), values.size]
-          when 32
-            values = Array(data)
-            [values.pack("V*"), values.size]
-          else
-            raise ArgumentError, "Unsupported property format: #{format}"
-          end
+          request_encoder.pack_property_data(data, format)
         end
 
         def pad_to_4(str)
-          padding = (4 - str.bytesize % 4) % 4
-          str + ("\x00" * padding)
+          request_encoder.pad_to_4(str)
         end
 
         def pad_length(len)
           ((len + 3) / 4) * 4
+        end
+
+        def transport
+          return @transport if @transport&.socket.equal?(@socket)
+
+          @transport = Transport.new(@socket)
+        end
+
+        def request_encoder
+          @request_encoder ||= RequestEncoder.new
+        end
+
+        def event_parser
+          @event_parser ||= EventParser.new
+        end
+
+        def atom_cache
+          @atom_cache ||= AtomCache.new { |name| resolve_atom(name) }
         end
       end
     end
