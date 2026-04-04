@@ -4,9 +4,11 @@ module RBGL
   module GUI
     class Window
       class RenderLoop
+        DEFAULT_TIME_SOURCE = -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
+
         attr_reader :fps, :dropped_frames
 
-        def initialize(time_source: -> { Time.now })
+        def initialize(time_source: DEFAULT_TIME_SOURCE)
           @time_source = time_source
           @fps = 0
           @dropped_frames = 0

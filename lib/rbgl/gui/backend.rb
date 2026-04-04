@@ -5,6 +5,9 @@ module RBGL
     class BackendUnavailable < StandardError
     end
 
+    class BackendSelectionError < ArgumentError
+    end
+
     class Backend
       attr_reader :width, :height, :title
 

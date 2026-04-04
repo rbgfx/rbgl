@@ -13,7 +13,6 @@ module RBGL
           super
           @connection = Connection.new
           @windows = {}
-          @dropped_frames = 0
           setup_window(width, height, title)
         end
 
@@ -53,7 +52,7 @@ module RBGL
           return false unless window
 
           buffer_object = wait_for_available_buffer(window)
-          return record_dropped_frame unless buffer_object
+          return false unless buffer_object
 
           buffer = convert_to_wayland_format(framebuffer)
           buffer_object.write(buffer)
@@ -92,10 +91,6 @@ module RBGL
           return false unless @handle
 
           @windows[@handle]&.[](:should_close) || false
-        end
-
-        def dropped_frames
-          @dropped_frames ||= 0
         end
 
         def close
@@ -207,10 +202,6 @@ module RBGL
           tmpfile
         end
 
-        def record_dropped_frame
-          @dropped_frames = dropped_frames + 1
-          false
-        end
       end
     end
   end

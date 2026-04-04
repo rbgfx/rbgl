@@ -106,7 +106,7 @@ class BackendFactoryTest < Test::Unit::TestCase
       raise Errno::ECONNREFUSED, "cannot connect"
     end
 
-    error = assert_raise(RuntimeError) do
+    error = assert_raise(RBGL::GUI::BackendUnavailable) do
       RBGL::GUI::BackendFactory.send(
         :build_auto_backend,
         width: 64,
@@ -122,8 +122,32 @@ class BackendFactoryTest < Test::Unit::TestCase
     assert_includes error.message, "x11"
   end
 
+  test "native_backend_candidates raises when no display server is available" do
+    error = assert_raise(RBGL::GUI::BackendUnavailable) do
+      RBGL::GUI::BackendFactory.send(
+        :native_backend_candidates,
+        platform: "x86_64-linux",
+        env: {}
+      )
+    end
+
+    assert_includes error.message, "No display server"
+  end
+
+  test "native_backend_candidates raises on unsupported platform" do
+    error = assert_raise(RBGL::GUI::BackendUnavailable) do
+      RBGL::GUI::BackendFactory.send(
+        :native_backend_candidates,
+        platform: "plan9",
+        env: {}
+      )
+    end
+
+    assert_includes error.message, "Unsupported platform"
+  end
+
   test "build raises for unknown backend" do
-    assert_raise(RuntimeError) do
+    assert_raise(RBGL::GUI::BackendSelectionError) do
       RBGL::GUI::BackendFactory.build(:unknown, width: 1, height: 1, title: "Test")
     end
   end

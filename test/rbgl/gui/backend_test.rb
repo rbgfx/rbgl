@@ -76,4 +76,8 @@ class BackendTest < Test::Unit::TestCase
   test "backend unavailable is a standard error" do
     assert_kind_of StandardError, RBGL::GUI::BackendUnavailable.new("unavailable")
   end
+
+  test "backend selection error is an argument error" do
+    assert_kind_of ArgumentError, RBGL::GUI::BackendSelectionError.new("invalid")
+  end
 end

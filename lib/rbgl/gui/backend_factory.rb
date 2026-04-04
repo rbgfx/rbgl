@@ -53,7 +53,7 @@ module RBGL
           when Backend
             backend
           else
-            raise "Unknown backend: #{backend}"
+            raise BackendSelectionError, "Unknown backend: #{backend}"
           end
         end
 
@@ -61,7 +61,7 @@ module RBGL
           return if errors.empty?
 
           details = errors.map { |backend, error| "#{backend}: #{error.class}: #{error.message}" }.join(", ")
-          raise RuntimeError, "Failed to initialize any native backend (#{details})"
+          raise BackendUnavailable, "Failed to initialize any native backend (#{details})"
         end
 
         def native_backend_candidates(platform:, env:)
@@ -74,9 +74,9 @@ module RBGL
             candidates << :x11 if env["DISPLAY"]
             return candidates unless candidates.empty?
 
-            raise "No display server found (DISPLAY or WAYLAND_DISPLAY not set)"
+            raise BackendUnavailable, "No display server found (DISPLAY or WAYLAND_DISPLAY not set)"
           else
-            raise "Unsupported platform: #{platform}"
+            raise BackendUnavailable, "Unsupported platform: #{platform}"
           end
         end
       end

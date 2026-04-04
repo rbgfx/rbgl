@@ -105,6 +105,15 @@ class WindowTest < Test::Unit::TestCase
     window.present_framebuffer(fb)
   end
 
+  test "present_framebuffer tracks dropped frames when present returns false" do
+    backend = SpyWindowBackend.new(100, 100)
+    backend.present_result = false
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    assert_false window.present_framebuffer
+    assert_equal 1, window.dropped_frames
+  end
+
   test "fps returns 0 initially" do
     window = RBGL::GUI::Window.new(
       width: 100,
@@ -127,7 +136,7 @@ class WindowTest < Test::Unit::TestCase
   end
 
   test "raises error for unknown backend" do
-    assert_raise(RuntimeError) do
+    assert_raise(RBGL::GUI::BackendSelectionError) do
       RBGL::GUI::Window.new(
         width: 100,
         height: 100,
@@ -334,6 +343,33 @@ class MockLoopBackend < RBGL::GUI::Backend
 end
 
 class WindowRunTest < Test::Unit::TestCase
+  test "render loop uses monotonic time by default" do
+    render_loop = RBGL::GUI::Window::RenderLoop.new
+    backend = MockLoopBackend.new(100, 100, max_frames: 1)
+    context = RBGL::Engine::Context.new(width: 100, height: 100)
+    process_singleton = class << Process; self; end
+    backup_method = :__rbgl_original_clock_gettime_for_test__
+    calls = []
+
+    process_singleton.send(:alias_method, backup_method, :clock_gettime)
+    process_singleton.send(:remove_method, :clock_gettime)
+    process_singleton.send(:define_method, :clock_gettime) do |clock_id, *_args|
+      calls << clock_id
+      1.0
+    end
+
+    render_loop.run(backend: backend, context: context, process_events: -> {}) do |_ctx, _dt|
+    end
+
+    assert_includes calls, Process::CLOCK_MONOTONIC
+  ensure
+    next unless process_singleton&.method_defined?(backup_method)
+
+    process_singleton.send(:remove_method, :clock_gettime)
+    process_singleton.send(:alias_method, :clock_gettime, backup_method)
+    process_singleton.send(:remove_method, backup_method)
+  end
+
   test "run executes frame loop" do
     backend = MockLoopBackend.new(100, 100, max_frames: 3)
     window = RBGL::GUI::Window.new(

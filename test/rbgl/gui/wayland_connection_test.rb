@@ -470,7 +470,6 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_equal 1, written.size
     assert_equal [buffer], attached
     assert_true result
-    assert_equal 0, backend.dropped_frames
   end
 
   test "present aborts when no shm buffer becomes available before timeout" do
@@ -519,7 +518,6 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_empty written
     assert_empty attached
     assert_false result
-    assert_equal 1, backend.dropped_frames
   end
 
   test "create_shm_buffer wraps the file, pool, and wl_buffer" do
