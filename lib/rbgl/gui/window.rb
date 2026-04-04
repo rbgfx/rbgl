@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require_relative "window/render_loop"
+require_relative "window/event_dispatcher"
+
 module RBGL
   module GUI
     class Window
@@ -11,13 +14,13 @@ module RBGL
         @title = title
         @context = Engine::Context.new(width: width, height: height)
         @backend = build_backend(backend, width: width, height: height, title: title, **options)
-
-        @running = false
-        @frame_callback = nil
-        @last_time = Time.now
-        @fps = 0
-        @frame_count = 0
         @event_handlers = Hash.new { |h, k| h[k] = [] }
+        @event_dispatcher = EventDispatcher.new(
+          backend: @backend,
+          event_handlers: @event_handlers,
+          on_resize: method(:apply_resize)
+        )
+        @render_loop = RenderLoop.new
       end
 
       def on(event_type, &block)
@@ -37,32 +40,17 @@ module RBGL
       end
 
       def run(&frame_callback)
-        @frame_callback = frame_callback
-        @running = true
-        @start_time = Time.now
-        @last_time = @start_time
-
-        while @running && !@backend.should_close?
-          current_time = Time.now
-          delta_time = current_time - @last_time
-          @last_time = current_time
-
-          process_events
-
-          @frame_callback&.call(@context, delta_time)
-
-          @backend.present(@context.framebuffer)
-
-          @frame_count += 1
-          elapsed = current_time - @start_time
-          @fps = @frame_count / elapsed if elapsed > 0
-        end
-
+        @render_loop.run(
+          backend: @backend,
+          context: @context,
+          process_events: method(:process_events),
+          &frame_callback
+        )
         @backend.close
       end
 
       def stop
-        @running = false
+        @render_loop.stop
       end
 
       def present_framebuffer(framebuffer = nil)
@@ -94,7 +82,9 @@ module RBGL
         @backend.close
       end
 
-      attr_reader :fps
+      def fps
+        @render_loop.fps
+      end
 
       private
 
@@ -103,13 +93,7 @@ module RBGL
       end
 
       def process_events
-        Array(@backend.poll_events).each do |event|
-          next unless event.is_a?(Event)
-
-          apply_resize(event) if event.type == :resize
-          @backend.dispatch_event(event)
-          @event_handlers[event.type].each { |handler| handler.call(event) }
-        end
+        @event_dispatcher.process
       end
 
       def apply_resize(event)
