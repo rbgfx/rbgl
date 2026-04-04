@@ -8,6 +8,7 @@ module RBGL
       def initialize(width:, height:)
         @framebuffer = Framebuffer.new(width, height)
         @rasterizer = Rasterizer.new(@framebuffer)
+        @triangle_clipper = TriangleClipper.new
         @pipeline = nil
         @uniforms = Uniforms.new
         @vertex_buffer = nil
@@ -148,14 +149,15 @@ module RBGL
 
       def draw_triangle(v0, v1, v2)
         return unless v0 && v1 && v2
-        return if clip_triangle?(v0, v1, v2)
 
-        @rasterizer.rasterize_triangle(
-          v0, v1, v2,
-          @pipeline.fragment_shader,
-          @uniforms,
-          **rasterizer_state
-        )
+        clip_triangle(v0, v1, v2).each do |triangle|
+          @rasterizer.rasterize_triangle(
+            *triangle,
+            @pipeline.fragment_shader,
+            @uniforms,
+            **rasterizer_state
+          )
+        end
       end
 
       def draw_line(v0, v1)
@@ -170,21 +172,12 @@ module RBGL
         @rasterizer.rasterize_point(v, @pipeline.fragment_shader, @uniforms, **rasterizer_state)
       end
 
-      def clip_triangle?(v0, v1, v2)
-        positions = [v0[:position], v1[:position], v2[:position]].map do |p|
-          if p.is_a?(Larb::Vec4)
-            p.perspective_divide
-          else
-            p
-          end
-        end
+      def clip_triangle(v0, v1, v2)
+        @triangle_clipper.clip(v0, v1, v2)
+      end
 
-        positions.all? { |p| p.x < -1 } ||
-          positions.all? { |p| p.x > 1 } ||
-          positions.all? { |p| p.y < -1 } ||
-          positions.all? { |p| p.y > 1 } ||
-          positions.all? { |p| p.z < -1 } ||
-          positions.all? { |p| p.z > 1 }
+      def clip_triangle?(v0, v1, v2)
+        clip_triangle(v0, v1, v2).empty?
       end
 
       def rasterizer_state

@@ -204,6 +204,39 @@ class ContextTest < Test::Unit::TestCase
     assert_true @ctx.send(:clip_triangle?, v0, v1, v2)
   end
 
+  test "clip_triangle keeps partially visible triangles and returns clipped vertices" do
+    v0 = shader_vertex(Larb::Vec4.new(-0.5, 0.0, 0.0, 1.0))
+    v1 = shader_vertex(Larb::Vec4.new(1.5, 0.0, 0.0, 1.0))
+    v2 = shader_vertex(Larb::Vec4.new(0.0, 0.5, 0.0, 1.0))
+
+    clipped = @ctx.send(:clip_triangle, v0, v1, v2)
+
+    assert_equal 2, clipped.size
+    assert_false @ctx.send(:clip_triangle?, v0, v1, v2)
+    assert(clipped.all? { |triangle| triangle.size == 3 })
+    assert(clipped.all? { |triangle|
+      triangle.all? do |vertex|
+        position = vertex[:position]
+        position && position.x.abs <= position.w + 1e-6 &&
+          position.y.abs <= position.w + 1e-6 &&
+          position.z.abs <= position.w + 1e-6
+      end
+    })
+  end
+
+  test "draw_arrays clips triangles crossing the view frustum" do
+    @ctx.bind_pipeline(@pipeline)
+    @vb.add_vertex(position: Larb::Vec4.new(-0.5, 0.0, 0.0, 1.0), color: Larb::Color.new(1, 0, 0, 1))
+    @vb.add_vertex(position: Larb::Vec4.new(1.5, 0.0, 0.0, 1.0), color: Larb::Color.new(0, 1, 0, 1))
+    @vb.add_vertex(position: Larb::Vec4.new(0.0, 0.75, 0.0, 1.0), color: Larb::Color.new(0, 0, 1, 1))
+    @ctx.bind_vertex_buffer(@vb)
+
+    @ctx.draw_arrays(:triangles, 0, 3)
+
+    color = @ctx.framebuffer.get_pixel(60, 35)
+    assert (color.r + color.g + color.b).positive?
+  end
+
   test "draw_arrays respects pipeline depth_test setting" do
     render_triangle(color: Larb::Color.new(1, 0, 0, 1), z: 0.0)
     render_triangle(color: Larb::Color.new(0, 0, 1, 1), z: 0.5, depth_test: false)
@@ -298,5 +331,12 @@ class ContextTest < Test::Unit::TestCase
     @ctx.bind_pipeline(pipeline)
     @ctx.bind_vertex_buffer(vb)
     @ctx.draw_arrays(:triangles, 0, 3)
+  end
+
+  def shader_vertex(position, color = Larb::Color.new(1, 1, 1, 1))
+    vertex = RBGL::Engine::ShaderIO.new
+    vertex[:position] = position
+    vertex[:color] = color
+    vertex
   end
 end

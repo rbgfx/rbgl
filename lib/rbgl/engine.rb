@@ -6,6 +6,7 @@ require_relative "engine/shader"
 require_relative "engine/texture"
 require_relative "engine/rasterizer"
 require_relative "engine/pipeline"
+require_relative "engine/triangle_clipper"
 require_relative "engine/context"
 
 module RBGL
