@@ -3,11 +3,42 @@
 module RBGL
   module GUI
     class BackendFactory
+      AUTO_BACKEND_ERRORS = [LoadError, SystemCallError].freeze
+
       class << self
-        def build(backend, width:, height:, title:, **options)
+        def build(backend, width:, height:, title:, platform: RUBY_PLATFORM, env: ENV, **options)
           case backend
           when :auto, :native
-            build(native_backend_key, width: width, height: height, title: title, **options)
+            build_auto_backend(
+              width: width,
+              height: height,
+              title: title,
+              platform: platform,
+              env: env,
+              **options
+            )
+          else
+            build_specific_backend(backend, width: width, height: height, title: title, **options)
+          end
+        end
+
+        private
+
+        def build_auto_backend(width:, height:, title:, platform:, env:, builder: nil, **options)
+          builder ||= method(:build_specific_backend)
+          errors = []
+
+          native_backend_candidates(platform: platform, env: env).each do |candidate|
+            return builder.call(candidate, width: width, height: height, title: title, **options)
+          rescue *AUTO_BACKEND_ERRORS => error
+            errors << [candidate, error]
+          end
+
+          raise_auto_backend_error(errors)
+        end
+
+        def build_specific_backend(backend, width:, height:, title:, **options)
+          case backend
           when :file
             FileBackend.new(width, height, title, **options)
           when :x11
@@ -26,15 +57,26 @@ module RBGL
           end
         end
 
-        private
+        def raise_auto_backend_error(errors)
+          return if errors.empty?
+
+          details = errors.map { |backend, error| "#{backend}: #{error.class}: #{error.message}" }.join(", ")
+          raise RuntimeError, "Failed to initialize any native backend (#{details})"
+        end
 
         def native_backend_key(platform: RUBY_PLATFORM, env: ENV)
+          native_backend_candidates(platform: platform, env: env).first
+        end
+
+        def native_backend_candidates(platform:, env:)
           case platform
           when /darwin/
-            :cocoa
+            [:cocoa]
           when /linux/
-            return :wayland if env["WAYLAND_DISPLAY"]
-            return :x11 if env["DISPLAY"]
+            candidates = []
+            candidates << :wayland if env["WAYLAND_DISPLAY"]
+            candidates << :x11 if env["DISPLAY"]
+            return candidates unless candidates.empty?
 
             raise "No display server found (DISPLAY or WAYLAND_DISPLAY not set)"
           else

@@ -55,6 +55,50 @@ class BackendFactoryTest < Test::Unit::TestCase
     assert_equal :cocoa, key
   end
 
+  test "build_auto_backend falls back from wayland to x11 when wayland init fails" do
+    calls = []
+    builder = lambda do |backend, **|
+      calls << backend
+      raise Errno::ENOENT, "missing wayland socket" if backend == :wayland
+
+      backend
+    end
+
+    backend = RBGL::GUI::BackendFactory.send(
+      :build_auto_backend,
+      width: 64,
+      height: 48,
+      title: "Test",
+      platform: "x86_64-linux",
+      env: { "WAYLAND_DISPLAY" => "wayland-0", "DISPLAY" => ":0" },
+      builder: builder
+    )
+
+    assert_equal :x11, backend
+    assert_equal [:wayland, :x11], calls
+  end
+
+  test "build_auto_backend raises when every native backend fails" do
+    builder = lambda do |_backend, **|
+      raise Errno::ECONNREFUSED, "cannot connect"
+    end
+
+    error = assert_raise(RuntimeError) do
+      RBGL::GUI::BackendFactory.send(
+        :build_auto_backend,
+        width: 64,
+        height: 48,
+        title: "Test",
+        platform: "x86_64-linux",
+        env: { "WAYLAND_DISPLAY" => "wayland-0", "DISPLAY" => ":0" },
+        builder: builder
+      )
+    end
+
+    assert_includes error.message, "wayland"
+    assert_includes error.message, "x11"
+  end
+
   test "build raises for unknown backend" do
     assert_raise(RuntimeError) do
       RBGL::GUI::BackendFactory.build(:unknown, width: 1, height: 1, title: "Test")

@@ -6,6 +6,9 @@ module RBGL
   module GUI
     module Wayland
       class Backend < GUI::Backend
+        BUFFER_WAIT_TIMEOUT = 0.25
+        BUFFER_POLL_INTERVAL = 0.016
+
         def initialize(width, height, title = "RBGL")
           super
           @connection = Connection.new
@@ -50,6 +53,7 @@ module RBGL
           return unless window
 
           buffer_object = wait_for_available_buffer(window)
+          return unless buffer_object
 
           buffer = convert_to_wayland_format(framebuffer)
           buffer_object.write(buffer)
@@ -138,11 +142,14 @@ module RBGL
         end
 
         def wait_for_available_buffer(window)
+          deadline = monotonic_time + BUFFER_WAIT_TIMEOUT
+
           loop do
             buffer = next_available_buffer(window)
             return buffer if buffer
+            return nil if abort_buffer_wait?(window, deadline)
 
-            pump_connection(timeout: 0.016)
+            pump_connection(timeout: remaining_buffer_wait(deadline))
           end
         end
 
@@ -152,6 +159,18 @@ module RBGL
           else
             sleep(timeout)
           end
+        end
+
+        def abort_buffer_wait?(window, deadline)
+          window[:should_close] || monotonic_time >= deadline
+        end
+
+        def remaining_buffer_wait(deadline)
+          [deadline - monotonic_time, BUFFER_POLL_INTERVAL].min.clamp(0.0, BUFFER_POLL_INTERVAL)
+        end
+
+        def monotonic_time
+          Process.clock_gettime(Process::CLOCK_MONOTONIC)
         end
 
         def create_shm_buffers(width, height, count = 2)

@@ -448,6 +448,53 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_equal [buffer], attached
   end
 
+  test "present aborts when no shm buffer becomes available before timeout" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    framebuffer = RBGL::Engine::Framebuffer.new(2, 2)
+    written = []
+    attached = []
+    pump_calls = 0
+    times = [0.0, 0.1, 0.3]
+
+    buffer = Object.new
+    buffer.define_singleton_method(:available?) { false }
+    buffer.define_singleton_method(:write) { |data| written << data }
+    buffer.define_singleton_method(:mark_in_use) { }
+
+    surface = Object.new
+    surface.define_singleton_method(:damage) { |_x, _y, _w, _h| }
+    surface.define_singleton_method(:attach) { |current, _x, _y| attached << current }
+    surface.define_singleton_method(:commit) { }
+
+    connection = Object.new
+    connection.define_singleton_method(:flush) { }
+    connection.define_singleton_method(:pump_events) do |timeout:|
+      pump_calls += 1
+      timeout
+    end
+
+    backend.instance_variable_set(:@connection, connection)
+    backend.instance_variable_set(:@handle, 10)
+    backend.instance_variable_set(
+      :@windows,
+      {
+        10 => {
+          surface: surface,
+          buffers: [buffer],
+          shm_buffer: buffer,
+          should_close: false
+        }
+      }
+    )
+    backend.define_singleton_method(:monotonic_time) { times.shift || times.last || 0.3 }
+
+    backend.present(framebuffer)
+
+    assert_equal 1, pump_calls
+    assert_empty written
+    assert_empty attached
+  end
+
   test "create_shm_buffer wraps the file, pool, and wl_buffer" do
     backend = RBGL::GUI::Wayland::Backend.allocate
     tempfile = Tempfile.new("rbgl-wayland-test")
