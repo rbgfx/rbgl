@@ -74,10 +74,22 @@ class X11ConnectionTest < Test::Unit::TestCase
   test "generate_id increments from resource base" do
     connection = build_connection
     connection.instance_variable_set(:@resource_id_base, 0x1000)
+    connection.instance_variable_set(:@resource_id_mask, 0x0FFF)
     connection.instance_variable_set(:@resource_id_counter, 0)
 
     assert_equal 0x1000, connection.generate_id
     assert_equal 0x1001, connection.generate_id
+  end
+
+  test "generate_id raises when resource id space is exhausted" do
+    connection = build_connection
+    connection.instance_variable_set(:@resource_id_base, 0x1000)
+    connection.instance_variable_set(:@resource_id_mask, 0x0001)
+    connection.instance_variable_set(:@resource_id_counter, 0x0002)
+
+    assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.generate_id
+    end
   end
 
   test "flush delegates to socket" do

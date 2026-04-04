@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "socket"
+require_relative "../backend"
 require_relative "atom_cache"
 require_relative "event_parser"
 require_relative "request_encoder"
@@ -25,7 +26,10 @@ module RBGL
         end
 
         def generate_id
-          id = @resource_id_base | @resource_id_counter
+          masked_counter = @resource_id_counter & @resource_id_mask
+          raise GUI::BackendUnavailable, "X11 resource ID space exhausted" if masked_counter != @resource_id_counter
+
+          id = @resource_id_base | masked_counter
           @resource_id_counter += 1
           id
         end
