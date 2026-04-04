@@ -28,6 +28,7 @@ module RBGL
         @frame_count += 1
 
         @should_close = true if @max_frames && @frame_count >= @max_frames
+        true
       end
 
       def poll_events

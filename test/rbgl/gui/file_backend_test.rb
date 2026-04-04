@@ -68,7 +68,7 @@ class FileBackendTest < Test::Unit::TestCase
   end
 
   test "present creates PPM file" do
-    @backend.present(@fb)
+    assert_true @backend.present(@fb)
     assert File.exist?(File.join(@tmpdir, "frame_00000.ppm"))
   end
 

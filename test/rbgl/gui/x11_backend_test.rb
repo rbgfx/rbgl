@@ -380,6 +380,35 @@ class X11ConnectionTest < Test::Unit::TestCase
 end
 
 class X11BackendTest < Test::Unit::TestCase
+  test "present returns false when no window handle is available" do
+    backend = RBGL::GUI::X11::Backend.allocate
+    backend.instance_variable_set(:@handle, nil)
+
+    assert_false backend.present(RBGL::Engine::Framebuffer.new(1, 1))
+  end
+
+  test "present returns true after flushing image data" do
+    backend = RBGL::GUI::X11::Backend.allocate
+    framebuffer = RBGL::Engine::Framebuffer.new(2, 2)
+    flushed = 0
+    put_image_args = nil
+    display = Object.new
+    display.define_singleton_method(:root_depth) { 24 }
+    display.define_singleton_method(:put_image) { |**kwargs| put_image_args = kwargs }
+    display.define_singleton_method(:flush) { flushed += 1 }
+
+    backend.instance_variable_set(:@display, display)
+    backend.instance_variable_set(:@handle, 9)
+    backend.instance_variable_set(:@windows, { 9 => { gc: 12 } })
+
+    assert_true backend.present(framebuffer)
+    assert_equal 1, flushed
+    assert_equal 9, put_image_args[:drawable]
+    assert_equal 12, put_image_args[:gc]
+  end
+end
+
+class X11BackendTest < Test::Unit::TestCase
   class FakeDisplay
     attr_reader :create_window_calls, :change_property_calls, :wm_delete_window_calls, :map_calls, :create_gc_calls
     attr_reader :put_image_calls, :destroy_window_calls

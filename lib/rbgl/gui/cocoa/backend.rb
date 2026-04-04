@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-begin
-  require "metaco"
-  METACO_AVAILABLE = true
-rescue LoadError
-  METACO_AVAILABLE = false
-end
-
 module RBGL
   module GUI
     module Cocoa
+      METACO_AVAILABLE = begin
+        require "metaco"
+        true
+      rescue LoadError
+        false
+      end
+
       class Backend < GUI::Backend
         def initialize(width, height, title = "RBGL")
           unless METACO_AVAILABLE
@@ -22,10 +22,11 @@ module RBGL
         end
 
         def present(framebuffer)
-          return unless @handle
+          return false unless @handle
 
           Metaco.set_pixels(@handle, framebuffer.to_rgba_bytes, framebuffer.width, framebuffer.height)
           Metaco.present(@handle)
+          true
         end
 
         def poll_events

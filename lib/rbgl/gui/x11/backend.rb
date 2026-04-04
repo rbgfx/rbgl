@@ -53,10 +53,10 @@ module RBGL
         end
 
         def present(framebuffer)
-          return unless @handle
+          return false unless @handle
 
           window = @windows[@handle]
-          return unless window
+          return false unless window
 
           buffer = convert_to_x11_format(framebuffer)
 
@@ -72,6 +72,7 @@ module RBGL
           )
 
           @display.flush
+          true
         end
 
         def poll_events

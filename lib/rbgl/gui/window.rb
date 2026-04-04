@@ -49,7 +49,8 @@ module RBGL
           process_events: method(:process_events),
           &frame_callback
         )
-        @backend.close
+      ensure
+        @backend.close if @backend
       end
 
       def stop

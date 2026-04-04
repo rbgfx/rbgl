@@ -90,7 +90,7 @@ class WindowTest < Test::Unit::TestCase
       backend: :file,
       output_dir: @tmpdir
     )
-    window.present_framebuffer
+    assert_true window.present_framebuffer
     assert File.exist?(File.join(@tmpdir, "frame_00000.ppm"))
   end
 
@@ -385,6 +385,23 @@ class WindowRunTest < Test::Unit::TestCase
 
     assert_equal 3, frame_count
     assert_equal 3, backend.present_count
+    assert_true backend.closed
+  end
+
+  test "run closes backend when frame callback raises" do
+    backend = MockLoopBackend.new(100, 100, max_frames: 10)
+    window = RBGL::GUI::Window.new(
+      width: 100,
+      height: 100,
+      backend: backend
+    )
+
+    assert_raise(RuntimeError) do
+      window.run do |_ctx, _dt|
+        raise "boom"
+      end
+    end
+
     assert_true backend.closed
   end
 
