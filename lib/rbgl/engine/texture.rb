@@ -3,6 +3,8 @@
 module RBGL
   module Engine
     class Texture
+      PPM_HEADER = /\A(P[36])(?:\s+|#[^\n]*\n)+(\d+)(?:\s+|#[^\n]*\n)+(\d+)(?:\s+|#[^\n]*\n)+(\d+)\s/m
+
       attr_reader :width, :height, :data
       attr_accessor :wrap_s, :wrap_t, :filter_min, :filter_mag
 
@@ -55,24 +57,11 @@ module RBGL
       end
 
       def self.from_ppm(filename)
-        content = File.read(filename, mode: "rb")
-        lines = content.lines.reject { |l| l.start_with?("#") }
+        content = File.binread(filename)
+        format, width, height, max_val, body_offset = parse_ppm_header(content)
+        samples = parse_ppm_samples(content, format, width * height, max_val, body_offset)
 
-        _format = lines.shift.strip
-        dimensions = lines.shift.strip.split.map(&:to_i)
-        width, height = dimensions
-        max_val = lines.shift.strip.to_i
-
-        data = []
-        pixels = lines.join.split.map(&:to_i)
-        (pixels.size / 3).times do |i|
-          r = pixels[i * 3] / max_val.to_f
-          g = pixels[i * 3 + 1] / max_val.to_f
-          b = pixels[i * 3 + 2] / max_val.to_f
-          data << Larb::Color.rgb(r, g, b)
-        end
-
-        new(width, height, data)
+        new(width, height, colors_from_ppm_samples(samples, max_val))
       end
 
       def self.checker(width, height, size, color1 = Larb::Color.white, color2 = Larb::Color.black)
@@ -89,6 +78,60 @@ module RBGL
       def self.solid(width, height, color)
         new(width, height, Array.new(width * height) { color })
       end
+
+      def self.parse_ppm_header(content)
+        match = PPM_HEADER.match(content)
+        raise ArgumentError, "Invalid PPM header" unless match
+
+        format = match[1]
+        width = match[2].to_i
+        height = match[3].to_i
+        max_val = match[4].to_i
+        raise ArgumentError, "Unsupported PPM max value: #{max_val}" unless max_val.positive?
+
+        [format, width, height, max_val, match.end(0)]
+      end
+
+      def self.parse_ppm_samples(content, format, pixel_count, max_val, body_offset)
+        case format
+        when "P3"
+          parse_p3_samples(content.byteslice(body_offset..), pixel_count)
+        when "P6"
+          parse_p6_samples(content, body_offset, pixel_count, max_val)
+        else
+          raise ArgumentError, "Unsupported PPM format: #{format}"
+        end
+      end
+
+      def self.parse_p3_samples(body, pixel_count)
+        samples = body.to_s.gsub(/#[^\n]*/, " ").scan(/\d+/).map(&:to_i)
+        expected_count = pixel_count * 3
+        raise ArgumentError, "PPM pixel data is truncated" if samples.length < expected_count
+
+        samples.first(expected_count)
+      end
+
+      def self.parse_p6_samples(content, body_offset, pixel_count, max_val)
+        sample_size = max_val < 256 ? 1 : 2
+        expected_bytes = pixel_count * 3 * sample_size
+        body = content.byteslice(body_offset, expected_bytes)
+        raise ArgumentError, "PPM pixel data is truncated" unless body && body.bytesize == expected_bytes
+
+        if sample_size == 1
+          body.bytes
+        else
+          body.unpack("n*")
+        end
+      end
+
+      def self.colors_from_ppm_samples(samples, max_val)
+        samples.each_slice(3).map do |r, g, b|
+          Larb::Color.rgb(r / max_val.to_f, g / max_val.to_f, b / max_val.to_f)
+        end
+      end
+
+      private_class_method :parse_ppm_header, :parse_ppm_samples, :parse_p3_samples,
+                           :parse_p6_samples, :colors_from_ppm_samples
 
       private
 

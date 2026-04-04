@@ -173,6 +173,7 @@ class TextureTest < Test::Unit::TestCase
       ppm_file = File.join(tmpdir, "test.ppm")
       ppm_content = <<~PPM
         P3
+        # comment
         2 2
         255
         255 0 0
@@ -192,6 +193,31 @@ class TextureTest < Test::Unit::TestCase
       assert_in_delta 1.0, red_pixel.r, 0.01
       assert_in_delta 0.0, red_pixel.g, 0.01
       assert_in_delta 0.0, red_pixel.b, 0.01
+    end
+  end
+
+  test "from_ppm loads binary P6 files" do
+    Dir.mktmpdir do |tmpdir|
+      ppm_file = File.join(tmpdir, "test_binary.ppm")
+      header = "P6\n2 2\n255\n"
+      pixels = [
+        255, 0, 0,
+        0, 255, 0,
+        0, 0, 255,
+        255, 255, 255
+      ].pack("C*")
+      File.binwrite(ppm_file, header + pixels)
+
+      tex = RBGL::Engine::Texture.from_ppm(ppm_file)
+
+      assert_equal 2, tex.width
+      assert_equal 2, tex.height
+      assert_equal 4, tex.data.size
+
+      green_pixel = tex.get_pixel(1, 0)
+      assert_in_delta 0.0, green_pixel.r, 0.01
+      assert_in_delta 1.0, green_pixel.g, 0.01
+      assert_in_delta 0.0, green_pixel.b, 0.01
     end
   end
 end
