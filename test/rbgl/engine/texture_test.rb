@@ -28,6 +28,26 @@ class TextureTest < Test::Unit::TestCase
     assert_equal :linear, @tex.filter_mag
   end
 
+  test "initialization rejects data with unexpected size" do
+    assert_raise(ArgumentError) do
+      RBGL::Engine::Texture.new(2, 2, [Larb::Color.black])
+    end
+  end
+
+  test "initialization rejects data with unsupported pixel types" do
+    bad_pixels = Array.new(4, :red)
+
+    assert_raise(ArgumentError) do
+      RBGL::Engine::Texture.new(2, 2, bad_pixels)
+    end
+  end
+
+  test "initialization rejects non enumerable data" do
+    assert_raise(ArgumentError) do
+      RBGL::Engine::Texture.new(2, 2, 123)
+    end
+  end
+
   test "get_pixel returns pixel at position" do
     color = @tex.get_pixel(0, 0)
     assert_kind_of Larb::Color, color

@@ -19,7 +19,7 @@ module RBGL
       def initialize(width, height, data = nil)
         @width = width
         @height = height
-        @data = data || Array.new(width * height) { Larb::Color.black }
+        @data = data ? normalize_data!(data) : Array.new(width * height) { Larb::Color.black }
         @levels = [@data]
         @mipmaps_dirty = true
         @wrap_s = WRAP_REPEAT
@@ -151,6 +151,23 @@ module RBGL
                            :parse_p6_samples, :colors_from_ppm_samples
 
       private
+
+      def normalize_data!(data)
+        raise ArgumentError, "Texture data must be convertible to an Array" unless data.respond_to?(:to_a)
+
+        normalized = data.to_a
+        expected_size = @width * @height
+
+        unless normalized.size == expected_size
+          raise ArgumentError, "Texture data size mismatch: expected #{expected_size}, got #{normalized.size}"
+        end
+
+        unless normalized.all? { |pixel| pixel.is_a?(Larb::Color) }
+          raise ArgumentError, "Texture data must contain only Larb::Color values"
+        end
+
+        normalized
+      end
 
       def wrap_coord(coord, mode)
         case mode
