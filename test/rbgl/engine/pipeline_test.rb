@@ -51,4 +51,13 @@ class PipelineTest < Test::Unit::TestCase
     assert_same vs, pipeline.vertex_shader
     assert_same fs, pipeline.fragment_shader
   end
+
+  test "rejects invalid pipeline state values" do
+    pipeline = RBGL::Engine::Pipeline.new
+
+    assert_raise(ArgumentError) { pipeline.cull_mode = :bakc }
+    assert_raise(ArgumentError) { pipeline.blend_mode = :alph }
+    assert_raise(ArgumentError) { pipeline.depth_test = :yes }
+    assert_raise(ArgumentError) { pipeline.depth_write = nil }
+  end
 end

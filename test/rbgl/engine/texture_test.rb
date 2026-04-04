@@ -125,6 +125,26 @@ class TextureTest < Test::Unit::TestCase
     assert_in_delta 0.5, color.b, 0.001
   end
 
+  test "positive lod samples generated mip levels" do
+    tex = RBGL::Engine::Texture.new(4, 4)
+    white = Larb::Color.rgb(1.0, 1.0, 1.0)
+    black = Larb::Color.rgb(0.0, 0.0, 0.0)
+
+    4.times do |y|
+      4.times do |x|
+        tex.set_pixel(x, y, (x + y).even? ? white : black)
+      end
+    end
+
+    tex.filter_min = :nearest
+
+    color = tex.sample(0.125, 0.125, lod: 1)
+
+    assert_in_delta 0.5, color.r, 0.001
+    assert_in_delta 0.5, color.g, 0.001
+    assert_in_delta 0.5, color.b, 0.001
+  end
+
   test "checker creates checkerboard texture" do
     tex = RBGL::Engine::Texture.checker(8, 8, 2)
     assert_equal 8, tex.width
