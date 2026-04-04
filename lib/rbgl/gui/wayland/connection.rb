@@ -5,6 +5,37 @@ require "socket"
 module RBGL
   module GUI
     module Wayland
+      TypedArgument = Struct.new(:type, :value)
+
+      module Arguments
+        module_function
+
+        def uint(value)
+          TypedArgument.new(:uint, Integer(value))
+        end
+
+        def int(value)
+          TypedArgument.new(:int, Integer(value))
+        end
+
+        def fixed(value)
+          TypedArgument.new(:fixed, Float(value))
+        end
+
+        def string(value)
+          TypedArgument.new(:string, value.to_s)
+        end
+
+        def object(value)
+          object_id = value.respond_to?(:id) ? value.id : value
+          TypedArgument.new(:object, Integer(object_id))
+        end
+
+        def new_id(value)
+          TypedArgument.new(:new_id, Integer(value))
+        end
+      end
+
       class WaylandObject
         attr_reader :id, :connection
 
@@ -25,21 +56,27 @@ module RBGL
 
         def sync
           callback_id = @connection.allocate_id
-          send_request(0, callback_id)
-          Callback.new(@connection, callback_id)
+          send_request(0, Arguments.new_id(callback_id))
+          @connection.register_object(Callback.new(@connection, callback_id))
         end
 
         def get_registry
           registry_id = @connection.allocate_id
-          send_request(1, registry_id)
-          Registry.new(@connection, registry_id)
+          send_request(1, Arguments.new_id(registry_id))
+          @connection.register_object(Registry.new(@connection, registry_id))
         end
       end
 
       class Registry < WaylandObject
         def bind(name, interface, version)
           new_id = @connection.allocate_id
-          send_request(0, name, interface, version, new_id)
+          send_request(
+            0,
+            Arguments.uint(name),
+            Arguments.string(interface),
+            Arguments.uint(version),
+            Arguments.new_id(new_id)
+          )
           new_id
         end
       end
@@ -62,18 +99,18 @@ module RBGL
       class Compositor < WaylandObject
         def create_surface
           surface_id = @connection.allocate_id
-          send_request(0, surface_id)
-          Surface.new(@connection, surface_id)
+          send_request(0, Arguments.new_id(surface_id))
+          @connection.register_object(Surface.new(@connection, surface_id))
         end
       end
 
       class Surface < WaylandObject
         def attach(buffer, x, y)
-          send_request(1, buffer.id, x, y)
+          send_request(1, Arguments.object(buffer), Arguments.int(x), Arguments.int(y))
         end
 
         def damage(x, y, width, height)
-          send_request(2, x, y, width, height)
+          send_request(2, Arguments.int(x), Arguments.int(y), Arguments.int(width), Arguments.int(height))
         end
 
         def commit
@@ -88,8 +125,8 @@ module RBGL
       class Shm < WaylandObject
         def create_pool(fd, size)
           pool_id = @connection.allocate_id
-          @connection.send_request_with_fd(@id, 0, pool_id, size, fd)
-          ShmPool.new(@connection, pool_id)
+          @connection.send_request_with_fd(@id, 0, Arguments.new_id(pool_id), Arguments.int(size), fd)
+          @connection.register_object(ShmPool.new(@connection, pool_id))
         end
       end
 
@@ -101,8 +138,16 @@ module RBGL
                        when :xrgb8888 then 1
                        else 0
                        end
-          send_request(0, buffer_id, offset, width, height, stride, format_val)
-          WlBuffer.new(@connection, buffer_id)
+          send_request(
+            0,
+            Arguments.new_id(buffer_id),
+            Arguments.int(offset),
+            Arguments.int(width),
+            Arguments.int(height),
+            Arguments.int(stride),
+            Arguments.uint(format_val)
+          )
+          @connection.register_object(WlBuffer.new(@connection, buffer_id))
         end
 
         def destroy
@@ -111,32 +156,77 @@ module RBGL
       end
 
       class WlBuffer < WaylandObject
+        def initialize(connection, id)
+          super
+          @busy = false
+          @destroy_requested = false
+          @destroyed = false
+          @release_callbacks = []
+        end
+
+        def on_release(&block)
+          @release_callbacks << block if block
+        end
+
+        def mark_in_use
+          @busy = true
+        end
+
+        def available?
+          !@busy && !@destroy_requested && !@destroyed
+        end
+
+        def busy?
+          @busy
+        end
+
+        def handle_release
+          @busy = false
+          @release_callbacks.each(&:call)
+          finalize_destroy if @destroy_requested
+        end
+
         def destroy
+          return if @destroyed || @destroy_requested
+
+          if @busy
+            @destroy_requested = true
+          else
+            finalize_destroy
+          end
+        end
+
+        private
+
+        def finalize_destroy
+          return if @destroyed
+
           send_request(0)
+          @destroyed = true
         end
       end
 
       class XdgWmBase < WaylandObject
         def get_xdg_surface(surface)
           xdg_surface_id = @connection.allocate_id
-          send_request(2, xdg_surface_id, surface.id)
-          XdgSurface.new(@connection, xdg_surface_id)
+          send_request(2, Arguments.new_id(xdg_surface_id), Arguments.object(surface))
+          @connection.register_object(XdgSurface.new(@connection, xdg_surface_id))
         end
 
         def pong(serial)
-          send_request(3, serial)
+          send_request(3, Arguments.uint(serial))
         end
       end
 
       class XdgSurface < WaylandObject
         def get_toplevel
           toplevel_id = @connection.allocate_id
-          send_request(1, toplevel_id)
-          XdgToplevel.new(@connection, toplevel_id)
+          send_request(1, Arguments.new_id(toplevel_id))
+          @connection.register_object(XdgToplevel.new(@connection, toplevel_id))
         end
 
         def ack_configure(serial)
-          send_request(4, serial)
+          send_request(4, Arguments.uint(serial))
         end
 
         def destroy
@@ -146,7 +236,7 @@ module RBGL
 
       class XdgToplevel < WaylandObject
         def set_title(title)
-          send_request(2, title)
+          send_request(2, Arguments.string(title))
         end
 
         def destroy
@@ -171,10 +261,9 @@ module RBGL
           @pending_events = []
 
           @display = Display.new(self)
-          @objects[1] = @display
+          register_object(@display)
 
           @registry = @display.get_registry
-          @objects[@registry.id] = @registry
           flush
           roundtrip
 
@@ -185,6 +274,11 @@ module RBGL
           id = @next_id
           @next_id += 1
           id
+        end
+
+        def register_object(object)
+          @objects[object.id] = object
+          object
         end
 
         def send_request(object_id, opcode, *args)
@@ -243,6 +337,8 @@ module RBGL
             handle_registry_event(opcode, payload)
           when Callback
             obj.handle_done if opcode == 0
+          when WlBuffer
+            obj.handle_release if opcode == 0
           when XdgWmBase
             handle_xdg_wm_base_event(obj, opcode, payload)
           when XdgSurface
@@ -256,22 +352,19 @@ module RBGL
           if @globals["wl_compositor"]
             g = @globals["wl_compositor"]
             id = @registry.bind(g[:name], "wl_compositor", [g[:version], 4].min)
-            @compositor = Compositor.new(self, id)
-            @objects[id] = @compositor
+            @compositor = register_object(Compositor.new(self, id))
           end
 
           if @globals["wl_shm"]
             g = @globals["wl_shm"]
             id = @registry.bind(g[:name], "wl_shm", [g[:version], 1].min)
-            @shm = Shm.new(self, id)
-            @objects[id] = @shm
+            @shm = register_object(Shm.new(self, id))
           end
 
           if @globals["xdg_wm_base"]
             g = @globals["xdg_wm_base"]
             id = @registry.bind(g[:name], "xdg_wm_base", [g[:version], 2].min)
-            @xdg_wm_base = XdgWmBase.new(self, id)
-            @objects[id] = @xdg_wm_base
+            @xdg_wm_base = register_object(XdgWmBase.new(self, id))
           end
 
           flush
@@ -282,6 +375,8 @@ module RBGL
           result = String.new
           args.each do |arg|
             case arg
+            when TypedArgument
+              result << pack_typed_argument(arg)
             when Integer
               result << [arg].pack("V")
             when String
@@ -298,6 +393,22 @@ module RBGL
 
         def pad_length(len)
           ((len + 3) / 4) * 4
+        end
+
+        def pack_typed_argument(arg)
+          case arg.type
+          when :uint, :object, :new_id
+            [arg.value].pack("V")
+          when :int
+            [arg.value].pack("l<")
+          when :fixed
+            [(arg.value * 256).round].pack("l<")
+          when :string
+            len = arg.value.bytesize + 1
+            [len].pack("V") + arg.value + "\x00" + ("\x00" * ((4 - len % 4) % 4))
+          else
+            raise ArgumentError, "Unsupported Wayland argument type: #{arg.type}"
+          end
         end
 
         def handle_registry_event(opcode, payload)
@@ -347,8 +458,11 @@ module RBGL
           @file = file
           @pool = pool
           @wl_buffer = wl_buffer
+          @destroy_requested = false
+          @destroyed = false
           @file.binmode
           @file.seek(0)
+          @wl_buffer.on_release { handle_release }
         end
 
         def write(data)
@@ -357,14 +471,38 @@ module RBGL
           @file.flush
         end
 
+        def available?
+          @wl_buffer.available?
+        end
+
+        def mark_in_use
+          @wl_buffer.mark_in_use
+        end
+
         def id
           @wl_buffer.id
         end
 
         def destroy
+          return if @destroyed
+
+          @destroy_requested = true
           @wl_buffer.destroy
+          finalize_destroy unless @wl_buffer.busy?
+        end
+
+        private
+
+        def handle_release
+          finalize_destroy if @destroy_requested
+        end
+
+        def finalize_destroy
+          return if @destroyed
+
           @pool.destroy
           @file.close unless @file.closed?
+          @destroyed = true
         end
       end
     end

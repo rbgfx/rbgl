@@ -19,9 +19,11 @@ module RBGL
           toplevel = xdg_surface.get_toplevel
           toplevel.set_title(t)
 
-          shm_buffer = create_shm_buffer(w, h)
+          buffers = create_shm_buffers(w, h)
+          shm_buffer = buffers.first
 
           surface.attach(shm_buffer, 0, 0)
+          shm_buffer.mark_in_use
           surface.commit
           @connection.flush
 
@@ -30,6 +32,7 @@ module RBGL
             surface: surface,
             xdg_surface: xdg_surface,
             toplevel: toplevel,
+            buffers: buffers,
             shm_buffer: shm_buffer,
             width: w,
             height: h,
@@ -46,11 +49,16 @@ module RBGL
           window = @windows[@handle]
           return unless window
 
+          buffer_object = next_available_buffer(window)
+          return unless buffer_object
+
           buffer = convert_to_wayland_format(framebuffer)
-          window[:shm_buffer].write(buffer)
+          buffer_object.write(buffer)
 
           window[:surface].damage(0, 0, framebuffer.width, framebuffer.height)
-          window[:surface].attach(window[:shm_buffer], 0, 0)
+          window[:surface].attach(buffer_object, 0, 0)
+          buffer_object.mark_in_use
+          window[:shm_buffer] = buffer_object
           window[:surface].commit
           @connection.flush
         end
@@ -67,11 +75,13 @@ module RBGL
           return unless window
           return if window[:width] == width && window[:height] == height
 
-          old_buffer = window[:shm_buffer]
-          window[:shm_buffer] = create_shm_buffer(width, height)
+          old_buffers = window.fetch(:buffers, [window[:shm_buffer]].compact)
+          new_buffers = create_shm_buffers(width, height)
+          window[:buffers] = new_buffers
+          window[:shm_buffer] = new_buffers.first
           window[:width] = width
           window[:height] = height
-          old_buffer.destroy
+          old_buffers.each(&:destroy)
         end
 
         def should_close?
@@ -90,7 +100,7 @@ module RBGL
           window[:toplevel].destroy
           window[:xdg_surface].destroy
           window[:surface].destroy
-          window[:shm_buffer].destroy
+          window.fetch(:buffers, [window[:shm_buffer]].compact).each(&:destroy)
           @windows.delete(@handle)
           @handle = nil
         end
@@ -122,6 +132,14 @@ module RBGL
 
         def window_for_event(object_id)
           @windows.values.find { |window| window[:toplevel].id == object_id }
+        end
+
+        def next_available_buffer(window)
+          window.fetch(:buffers, [window[:shm_buffer]].compact).find(&:available?)
+        end
+
+        def create_shm_buffers(width, height, count = 2)
+          Array.new(count) { create_shm_buffer(width, height) }
         end
 
         def create_shm_buffer(width, height)

@@ -20,11 +20,23 @@ class WaylandProtocolObjectsTest < Test::Unit::TestCase
     end
 
     def send_request(object_id, opcode, *args)
-      @requests << [object_id, opcode, args]
+      @requests << [object_id, opcode, args.map { |arg| normalize(arg) }]
     end
 
     def send_request_with_fd(object_id, opcode, *args, fd)
-      @fd_requests << [object_id, opcode, args, fd]
+      @fd_requests << [object_id, opcode, args.map { |arg| normalize(arg) }, fd]
+    end
+
+    def register_object(object)
+      object
+    end
+
+    private
+
+    def normalize(arg)
+      return [arg.type, arg.value] if arg.is_a?(RBGL::GUI::Wayland::TypedArgument)
+
+      arg
     end
   end
 
@@ -38,8 +50,8 @@ class WaylandProtocolObjectsTest < Test::Unit::TestCase
     assert_equal 10, callback.id
     assert_equal 11, registry.id
     assert_equal [
-      [1, 0, [10]],
-      [1, 1, [11]]
+      [1, 0, [[:new_id, 10]]],
+      [1, 1, [[:new_id, 11]]]
     ], connection.requests
   end
 
@@ -72,21 +84,21 @@ class WaylandProtocolObjectsTest < Test::Unit::TestCase
     assert_equal 23, pool.id
     assert_equal 24, xdg_surface.id
     assert_equal 25, toplevel.id
-    assert_equal [4, 0, [23, 64], 9], connection.fd_requests.first
+    assert_equal [4, 0, [[:new_id, 23], [:int, 64]], 9], connection.fd_requests.first
     assert_equal [
-      [2, 0, [1, "wl_compositor", 4, 21]],
-      [3, 0, [22]],
-      [5, 2, [24, 22]],
-      [24, 1, [25]],
-      [23, 0, [26, 0, 4, 4, 16, 0]],
-      [22, 1, [26, 0, 0]],
-      [22, 2, [1, 2, 3, 4]],
+      [2, 0, [[:uint, 1], [:string, "wl_compositor"], [:uint, 4], [:new_id, 21]]],
+      [3, 0, [[:new_id, 22]]],
+      [5, 2, [[:new_id, 24], [:object, 22]]],
+      [24, 1, [[:new_id, 25]]],
+      [23, 0, [[:new_id, 26], [:int, 0], [:int, 4], [:int, 4], [:int, 16], [:uint, 0]]],
+      [22, 1, [[:object, 26], [:int, 0], [:int, 0]]],
+      [22, 2, [[:int, 1], [:int, 2], [:int, 3], [:int, 4]]],
       [22, 6, []],
       [22, 0, []],
-      [5, 3, [77]],
-      [24, 4, [88]],
+      [5, 3, [[:uint, 77]]],
+      [24, 4, [[:uint, 88]]],
       [24, 0, []],
-      [25, 2, ["RBGL"]],
+      [25, 2, [[:string, "RBGL"]]],
       [25, 0, []],
       [23, 1, []]
     ], connection.requests
@@ -207,6 +219,43 @@ class WaylandConnectionTest < Test::Unit::TestCase
       { type: :xdg_toplevel_configure, object_id: 12, width: 640, height: 480 }
     ], connection.instance_variable_get(:@pending_events)
   end
+
+  test "handle_event releases wl_buffer objects" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    buffer = RBGL::GUI::Wayland::WlBuffer.new(Object.new, 14)
+    buffer.mark_in_use
+
+    connection.instance_variable_set(:@objects, { 14 => buffer })
+
+    connection.send(:handle_event, 14, 0, +"")
+
+    assert_true buffer.available?
+  end
+
+  test "pack_args encodes typed wayland arguments" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    args = [
+      RBGL::GUI::Wayland::Arguments.uint(1),
+      RBGL::GUI::Wayland::Arguments.int(-2),
+      RBGL::GUI::Wayland::Arguments.fixed(1.5),
+      RBGL::GUI::Wayland::Arguments.string("wl"),
+      RBGL::GUI::Wayland::Arguments.object(9),
+      RBGL::GUI::Wayland::Arguments.new_id(10)
+    ]
+
+    packed = connection.send(:pack_args, args)
+
+    expected = [
+      [1].pack("V"),
+      [-2].pack("l<"),
+      [384].pack("l<"),
+      [3].pack("V") + "wl\x00\x00",
+      [9].pack("V"),
+      [10].pack("V")
+    ].join
+
+    assert_equal expected, packed
+  end
 end
 
 class WaylandBackendTest < Test::Unit::TestCase
@@ -280,12 +329,14 @@ class WaylandBackendTest < Test::Unit::TestCase
     old_buffer = Object.new
     new_buffer = Object.new
     old_buffer.define_singleton_method(:destroy) { old_buffer_destroyed = true }
+    old_buffer.define_singleton_method(:available?) { true }
 
     backend.instance_variable_set(:@handle, 10)
     backend.instance_variable_set(
       :@windows,
       {
         10 => {
+          buffers: [old_buffer],
           shm_buffer: old_buffer,
           width: 100,
           height: 80
@@ -294,18 +345,62 @@ class WaylandBackendTest < Test::Unit::TestCase
     )
 
     created = []
-    backend.define_singleton_method(:create_shm_buffer) do |width, height|
+    backend.define_singleton_method(:create_shm_buffers) do |width, height, count = 2|
       created << [width, height]
-      new_buffer
+      Array.new(count, new_buffer)
     end
 
     backend.resize(320, 200)
 
     assert_equal [[320, 200]], created
     assert_true old_buffer_destroyed
+    assert_equal [new_buffer, new_buffer], backend.instance_variable_get(:@windows)[10][:buffers]
     assert_equal new_buffer, backend.instance_variable_get(:@windows)[10][:shm_buffer]
     assert_equal 320, backend.width
     assert_equal 200, backend.height
+  end
+
+  test "present uses the next available shm buffer" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    framebuffer = RBGL::Engine::Framebuffer.new(2, 2)
+    written = []
+    attached = []
+    committed = 0
+
+    busy_buffer = Object.new
+    busy_buffer.define_singleton_method(:available?) { false }
+    free_buffer = Object.new
+    free_buffer.define_singleton_method(:available?) { true }
+    free_buffer.define_singleton_method(:write) { |data| written << data }
+    free_buffer.define_singleton_method(:mark_in_use) { }
+
+    surface = Object.new
+    surface.define_singleton_method(:damage) { |_x, _y, _w, _h| }
+    surface.define_singleton_method(:attach) { |buffer, _x, _y| attached << buffer }
+    surface.define_singleton_method(:commit) { committed += 1 }
+
+    connection = Object.new
+    connection.define_singleton_method(:flush) { }
+
+    backend.instance_variable_set(:@connection, connection)
+    backend.instance_variable_set(:@handle, 10)
+    backend.instance_variable_set(
+      :@windows,
+      {
+        10 => {
+          surface: surface,
+          buffers: [busy_buffer, free_buffer],
+          shm_buffer: busy_buffer
+        }
+      }
+    )
+
+    backend.present(framebuffer)
+
+    assert_equal 1, written.size
+    assert_equal [free_buffer], attached
+    assert_equal 1, committed
+    assert_equal free_buffer, backend.instance_variable_get(:@windows)[10][:shm_buffer]
   end
 
   test "create_shm_buffer wraps the file, pool, and wl_buffer" do
@@ -315,6 +410,9 @@ class WaylandBackendTest < Test::Unit::TestCase
 
     pool = Object.new
     wl_buffer = Object.new
+    wl_buffer.define_singleton_method(:on_release) { |&block| block }
+    wl_buffer.define_singleton_method(:busy?) { false }
+    wl_buffer.define_singleton_method(:destroy) { }
     pool.define_singleton_method(:create_buffer) { |_offset, _width, _height, _stride, _format| wl_buffer }
     shm = Object.new
     shm.define_singleton_method(:create_pool) { |_fd, _size| pool }
@@ -335,7 +433,11 @@ class WaylandBackendTest < Test::Unit::TestCase
     tempfile = Tempfile.new("rbgl-shm-buffer")
     wl_buffer_destroyed = false
     pool_destroyed = false
-    wl_buffer = Struct.new(:id).new(55)
+    release_callback = nil
+    wl_buffer = Object.new
+    wl_buffer.define_singleton_method(:id) { 55 }
+    wl_buffer.define_singleton_method(:on_release) { |&block| release_callback = block }
+    wl_buffer.define_singleton_method(:busy?) { false }
     pool = Object.new
     wl_buffer.define_singleton_method(:destroy) { wl_buffer_destroyed = true }
     pool.define_singleton_method(:destroy) { pool_destroyed = true }
@@ -350,6 +452,33 @@ class WaylandBackendTest < Test::Unit::TestCase
     shm_buffer.destroy
 
     assert_true wl_buffer_destroyed
+    assert_true pool_destroyed
+    assert_true tempfile.closed?
+    assert_not_nil release_callback
+  end
+
+  test "shm_buffer defers resource cleanup until release when busy" do
+    tempfile = Tempfile.new("rbgl-shm-buffer-busy")
+    release_callback = nil
+    busy = true
+    destroyed = false
+    pool_destroyed = false
+    wl_buffer = Object.new
+    wl_buffer.define_singleton_method(:id) { 56 }
+    wl_buffer.define_singleton_method(:on_release) { |&block| release_callback = block }
+    wl_buffer.define_singleton_method(:busy?) { busy }
+    wl_buffer.define_singleton_method(:destroy) { destroyed = true }
+    pool = Object.new
+    pool.define_singleton_method(:destroy) { pool_destroyed = true }
+
+    shm_buffer = RBGL::GUI::Wayland::ShmBuffer.new(tempfile, pool, wl_buffer)
+    shm_buffer.destroy
+
+    assert_true destroyed
+    assert_false pool_destroyed
+    busy = false
+    release_callback.call
+
     assert_true pool_destroyed
     assert_true tempfile.closed?
   end
