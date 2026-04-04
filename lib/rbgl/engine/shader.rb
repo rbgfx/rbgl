@@ -132,13 +132,9 @@ module RBGL
       def clamp(v, min_val, max_val)
         case v
         when Numeric then v.clamp(min_val, max_val)
-        when Larb::Vec3
-          Larb::Vec3.new(
-            v.x.clamp(min_val, max_val),
-            v.y.clamp(min_val, max_val),
-            v.z.clamp(min_val, max_val)
-          )
         when Larb::Color then v.clamp
+        else
+          map_vector_components(v) { |component| component.clamp(min_val, max_val) }
         end
       end
 
@@ -166,7 +162,8 @@ module RBGL
       def abs(x)
         case x
         when Numeric then x.abs
-        when Larb::Vec3 then Larb::Vec3.new(x.x.abs, x.y.abs, x.z.abs)
+        else
+          map_vector_components(x, &:abs)
         end
       end
 
@@ -177,28 +174,32 @@ module RBGL
       def floor(x)
         case x
         when Numeric then x.floor
-        when Larb::Vec3 then Larb::Vec3.new(x.x.floor, x.y.floor, x.z.floor)
+        else
+          map_vector_components(x, &:floor)
         end
       end
 
       def ceil(x)
         case x
         when Numeric then x.ceil
-        when Larb::Vec3 then Larb::Vec3.new(x.x.ceil, x.y.ceil, x.z.ceil)
+        else
+          map_vector_components(x, &:ceil)
         end
       end
 
       def pow(x, y)
         case x
         when Numeric then x**y
-        when Larb::Vec3 then Larb::Vec3.new(x.x**y, x.y**y, x.z**y)
+        else
+          map_vector_components(x) { |component| component**y }
         end
       end
 
       def sqrt(x)
         case x
         when Numeric then Math.sqrt(x)
-        when Larb::Vec3 then Larb::Vec3.new(Math.sqrt(x.x), Math.sqrt(x.y), Math.sqrt(x.z))
+        else
+          map_vector_components(x) { |component| Math.sqrt(component) }
         end
       end
 
@@ -256,6 +257,26 @@ module RBGL
 
       def color_from_vec4(v)
         Larb::Color.from_vec4(v)
+      end
+
+      private
+
+      def map_vector_components(value)
+        components = case value
+                     when Larb::Vec2 then [value.x, value.y]
+                     when Larb::Vec3 then [value.x, value.y, value.z]
+                     when Larb::Vec4 then [value.x, value.y, value.z, value.w]
+                     else
+                       return nil
+                     end
+
+        rebuilt_components = components.map { |component| yield(component) }
+
+        case value
+        when Larb::Vec2 then Larb::Vec2.new(*rebuilt_components)
+        when Larb::Vec3 then Larb::Vec3.new(*rebuilt_components)
+        when Larb::Vec4 then Larb::Vec4.new(*rebuilt_components)
+        end
       end
     end
 

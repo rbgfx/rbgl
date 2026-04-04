@@ -204,6 +204,18 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 1.0, c.z
   end
 
+  test "clamp clamps Vec2 and Vec4" do
+    vec2 = clamp(Larb::Vec2.new(-1, 2), 0.0, 1.0)
+    vec4 = clamp(Larb::Vec4.new(-1, 0.25, 2, 0.75), 0.0, 1.0)
+
+    assert_equal 0.0, vec2.x
+    assert_equal 1.0, vec2.y
+    assert_equal 0.0, vec4.x
+    assert_equal 0.25, vec4.y
+    assert_equal 1.0, vec4.z
+    assert_equal 0.75, vec4.w
+  end
+
   test "clamp clamps colors" do
     c = clamp(Larb::Color.new(-1.0, 0.5, 2.0, 1.5), 0.0, 1.0)
     assert_equal 0.0, c.r
@@ -245,6 +257,16 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 3.0, v.z
   end
 
+  test "abs returns absolute values for Vec2 and Vec4" do
+    vec2 = abs(Larb::Vec2.new(-1, 2))
+    vec4 = abs(Larb::Vec4.new(-1, 2, -3, 4))
+
+    assert_equal 1.0, vec2.x
+    assert_equal 2.0, vec2.y
+    assert_equal 1.0, vec4.x
+    assert_equal 3.0, vec4.z
+  end
+
   test "sign returns -1, 0, or 1" do
     assert_equal(-1, sign(-5))
     assert_equal 0, sign(0)
@@ -260,6 +282,16 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 1.0, v.x
   end
 
+  test "floor floors Vec2 and Vec4" do
+    vec2 = floor(Larb::Vec2.new(1.9, 2.1))
+    vec4 = floor(Larb::Vec4.new(1.9, 2.1, 3.5, 4.9))
+
+    assert_equal 1.0, vec2.x
+    assert_equal 2.0, vec2.y
+    assert_equal 3.0, vec4.z
+    assert_equal 4.0, vec4.w
+  end
+
   test "ceil ceils numbers" do
     assert_equal 2, ceil(1.1)
   end
@@ -269,6 +301,16 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 2.0, v.x
     assert_equal 3.0, v.y
     assert_equal 4.0, v.z
+  end
+
+  test "ceil ceils Vec2 and Vec4" do
+    vec2 = ceil(Larb::Vec2.new(1.1, 2.9))
+    vec4 = ceil(Larb::Vec4.new(1.1, 2.9, 3.5, 4.1))
+
+    assert_equal 2.0, vec2.x
+    assert_equal 3.0, vec2.y
+    assert_equal 4.0, vec4.z
+    assert_equal 5.0, vec4.w
   end
 
   test "pow raises to power" do
@@ -282,6 +324,16 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 16.0, v.z
   end
 
+  test "pow raises Vec2 and Vec4 to powers" do
+    vec2 = pow(Larb::Vec2.new(2, 3), 2)
+    vec4 = pow(Larb::Vec4.new(2, 3, 4, 5), 2)
+
+    assert_equal 4.0, vec2.x
+    assert_equal 9.0, vec2.y
+    assert_equal 16.0, vec4.z
+    assert_equal 25.0, vec4.w
+  end
+
   test "sqrt returns square root" do
     assert_equal 3.0, sqrt(9)
   end
@@ -291,6 +343,16 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 2.0, v.x
     assert_equal 3.0, v.y
     assert_equal 4.0, v.z
+  end
+
+  test "sqrt returns Vec2 and Vec4 square roots" do
+    vec2 = sqrt(Larb::Vec2.new(4, 9))
+    vec4 = sqrt(Larb::Vec4.new(4, 9, 16, 25))
+
+    assert_equal 2.0, vec2.x
+    assert_equal 3.0, vec2.y
+    assert_equal 4.0, vec4.z
+    assert_equal 5.0, vec4.w
   end
 
   test "reflect reflects vector" do
