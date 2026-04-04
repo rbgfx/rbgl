@@ -7,7 +7,7 @@ module RBGL
     module X11
       class Backend < GUI::Backend
         def initialize(width, height, title = "RBGL", env: ENV)
-          super
+          super(width, height, title)
           @display = Connection.new(env["DISPLAY"] || ":0")
           @windows = {}
           setup_window(width, height, title)

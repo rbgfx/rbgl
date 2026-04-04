@@ -15,6 +15,22 @@ class BackendTest < Test::Unit::TestCase
     assert_equal "RBGL", backend.title
   end
 
+  test "initialize ignores forwarded keyword options from subclasses" do
+    backend_class = Class.new(RBGL::GUI::Backend) do
+      def initialize(width, height, title = "RBGL", env: {}, roundtrip_timeout: 0.1)
+        @env = env
+        @roundtrip_timeout = roundtrip_timeout
+        super
+      end
+    end
+
+    backend = backend_class.new(640, 480, "Test", env: { "DISPLAY" => ":1" }, roundtrip_timeout: 1.0)
+
+    assert_equal 640, backend.width
+    assert_equal 480, backend.height
+    assert_equal "Test", backend.title
+  end
+
   test "present raises NotImplementedError" do
     backend = RBGL::GUI::Backend.new(640, 480)
     assert_raise(NotImplementedError) do

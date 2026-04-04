@@ -10,7 +10,7 @@ module RBGL
         BUFFER_POLL_INTERVAL = 0.016
 
         def initialize(width, height, title = "RBGL", env: ENV, roundtrip_timeout: Connection::DEFAULT_ROUNDTRIP_TIMEOUT)
-          super
+          super(width, height, title)
           @connection = Connection.new(env: env, roundtrip_timeout: roundtrip_timeout)
           @windows = {}
           setup_window(width, height, title)

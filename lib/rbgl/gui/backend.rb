@@ -11,7 +11,7 @@ module RBGL
     class Backend
       attr_reader :width, :height, :title
 
-      def initialize(width, height, title = "RBGL")
+      def initialize(width, height, title = "RBGL", **_options)
         @width = width
         @height = height
         @title = title

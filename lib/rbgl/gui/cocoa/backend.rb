@@ -17,7 +17,7 @@ module RBGL
             raise LoadError, "metaco gem is required for Cocoa backend. Install it with: gem install metaco"
           end
 
-          super
+          super(width, height, title)
           Metaco.init
           @handle = Metaco.window_create(width, height, title)
         end
