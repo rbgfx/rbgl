@@ -149,6 +149,8 @@ module RBGL
       end
 
       def add_vertex(**attributes)
+        validate_attribute_keys!(attributes)
+
         vertex_data = []
         @layout.attributes.each do |name, attr|
           raise ArgumentError, "Missing attribute: #{name}" unless attributes.key?(name)
@@ -184,6 +186,15 @@ module RBGL
         buffer = new(layout)
         data.each { |vertex| buffer.add_vertex(**vertex) }
         buffer
+      end
+
+      private
+
+      def validate_attribute_keys!(attributes)
+        unknown_attributes = attributes.keys.map(&:to_sym) - @layout.attributes.keys
+        return if unknown_attributes.empty?
+
+        raise ArgumentError, "Unknown attributes: #{unknown_attributes.join(', ')}"
       end
     end
 

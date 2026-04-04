@@ -134,7 +134,7 @@ module RBGL
         when Numeric then v.clamp(min_val, max_val)
         when Larb::Color then v.clamp
         else
-          map_vector_components(v) { |component| component.clamp(min_val, max_val) }
+          component_map(v) { |component| component.clamp(min_val, max_val) }
         end
       end
 
@@ -143,96 +143,88 @@ module RBGL
       end
 
       def smoothstep(edge0, edge1, x)
-        t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0)
-        t * t * (3.0 - 2.0 * t)
+        component_ternary_map(edge0, edge1, x) do |e0, e1, value|
+          t = ((value - e0) / (e1 - e0)).clamp(0.0, 1.0)
+          t * t * (3.0 - 2.0 * t)
+        end
       end
 
       def step(edge, x)
-        x < edge ? 0.0 : 1.0
+        component_binary_map(edge, x) { |limit, value| value < limit ? 0.0 : 1.0 }
       end
 
       def fract(x)
-        x - x.floor
+        component_map(x) { |value| value - value.floor }
       end
 
       def mod(x, y)
-        x - y * (x / y).floor
+        component_binary_map(x, y) { |left, right| left - right * (left / right).floor }
       end
 
       def abs(x)
-        case x
-        when Numeric then x.abs
-        else
-          map_vector_components(x, &:abs)
-        end
+        component_map(x, &:abs)
       end
 
       def sign(x)
-        x <=> 0
+        component_map(x) { |value| value <=> 0 }
       end
 
       def floor(x)
-        case x
-        when Numeric then x.floor
-        else
-          map_vector_components(x, &:floor)
-        end
+        component_map(x, &:floor)
       end
 
       def ceil(x)
-        case x
-        when Numeric then x.ceil
-        else
-          map_vector_components(x, &:ceil)
-        end
+        component_map(x, &:ceil)
       end
 
       def pow(x, y)
-        case x
-        when Numeric then x**y
-        else
-          map_vector_components(x) { |component| component**y }
-        end
+        component_binary_map(x, y) { |left, right| left**right }
       end
 
       def sqrt(x)
-        case x
-        when Numeric then Math.sqrt(x)
-        else
-          map_vector_components(x) { |component| Math.sqrt(component) }
-        end
+        component_map(x) { |value| Math.sqrt(value) }
       end
 
       def sin(x)
-        Math.sin(x)
+        component_map(x) { |value| Math.sin(value) }
       end
 
       def cos(x)
-        Math.cos(x)
+        component_map(x) { |value| Math.cos(value) }
       end
 
       def tan(x)
-        Math.tan(x)
+        component_map(x) { |value| Math.tan(value) }
       end
 
       def asin(x)
-        Math.asin(x)
+        component_map(x) { |value| Math.asin(value) }
       end
 
       def acos(x)
-        Math.acos(x)
+        component_map(x) { |value| Math.acos(value) }
       end
 
       def atan(y, x = nil)
-        x ? Math.atan2(y, x) : Math.atan(y)
+        if x
+          component_binary_map(y, x) { |left, right| Math.atan2(left, right) }
+        else
+          component_map(y) { |value| Math.atan(value) }
+        end
       end
 
       def min(*args)
-        args.flatten.min
+        values = args.flatten
+        return values.min unless values.any? { |value| vector_value?(value) }
+
+        values.reduce { |current, value| component_binary_map(current, value) { |left, right| [left, right].min } }
       end
 
       def max(*args)
-        args.flatten.max
+        values = args.flatten
+        return values.max unless values.any? { |value| vector_value?(value) }
+
+        values.reduce { |current, value| component_binary_map(current, value) { |left, right| [left, right].max } }
       end
 
       def texture(tex, uv)
@@ -261,21 +253,61 @@ module RBGL
 
       private
 
-      def map_vector_components(value)
-        components = case value
-                     when Larb::Vec2 then [value.x, value.y]
-                     when Larb::Vec3 then [value.x, value.y, value.z]
-                     when Larb::Vec4 then [value.x, value.y, value.z, value.w]
-                     else
-                       return nil
-                     end
+      def component_map(value)
+        return yield(value) unless vector_value?(value)
 
-        rebuilt_components = components.map { |component| yield(component) }
+        rebuild_vector(value, vector_components(value).map { |component| yield(component) })
+      end
 
+      def component_binary_map(left, right)
+        return yield(left, right) unless vector_value?(left) || vector_value?(right)
+
+        template = left if vector_value?(left)
+        template ||= right
+
+        rebuilt_components = vector_components(template).each_index.map do |index|
+          yield(component_at(left, index), component_at(right, index))
+        end
+
+        rebuild_vector(template, rebuilt_components)
+      end
+
+      def component_ternary_map(first, second, third)
+        return yield(first, second, third) unless [first, second, third].any? { |value| vector_value?(value) }
+
+        template = [first, second, third].find { |value| vector_value?(value) }
+        rebuilt_components = vector_components(template).each_index.map do |index|
+          yield(component_at(first, index), component_at(second, index), component_at(third, index))
+        end
+
+        rebuild_vector(template, rebuilt_components)
+      end
+
+      def vector_value?(value)
+        value.is_a?(Larb::Vec2) || value.is_a?(Larb::Vec3) || value.is_a?(Larb::Vec4)
+      end
+
+      def vector_components(value)
         case value
-        when Larb::Vec2 then Larb::Vec2.new(*rebuilt_components)
-        when Larb::Vec3 then Larb::Vec3.new(*rebuilt_components)
-        when Larb::Vec4 then Larb::Vec4.new(*rebuilt_components)
+        when Larb::Vec2 then [value.x, value.y]
+        when Larb::Vec3 then [value.x, value.y, value.z]
+        when Larb::Vec4 then [value.x, value.y, value.z, value.w]
+        else
+          []
+        end
+      end
+
+      def component_at(value, index)
+        return value unless vector_value?(value)
+
+        vector_components(value)[index]
+      end
+
+      def rebuild_vector(template, components)
+        case template
+        when Larb::Vec2 then Larb::Vec2.new(*components)
+        when Larb::Vec3 then Larb::Vec3.new(*components)
+        when Larb::Vec4 then Larb::Vec4.new(*components)
         end
       end
     end

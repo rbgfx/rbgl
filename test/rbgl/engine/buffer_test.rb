@@ -192,6 +192,14 @@ class VertexBufferTest < Test::Unit::TestCase
     end
   end
 
+  test "raises error for unknown attributes" do
+    buffer = RBGL::Engine::VertexBuffer.new(@layout)
+
+    assert_raise(ArgumentError) do
+      buffer.add_vertex(position: [0, 0, 0], color: [1, 1, 1, 1], postion: [0, 0, 0])
+    end
+  end
+
   test "raises error for attribute values with the wrong arity" do
     buffer = RBGL::Engine::VertexBuffer.new(@layout)
 

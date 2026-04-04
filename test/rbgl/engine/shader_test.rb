@@ -273,6 +273,14 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 1, sign(5)
   end
 
+  test "sign returns component-wise values for vectors" do
+    vector = sign(Larb::Vec3.new(-2, 0, 3))
+
+    assert_equal(-1, vector.x)
+    assert_equal 0, vector.y
+    assert_equal 1, vector.z
+  end
+
   test "floor floors numbers" do
     assert_equal 1, floor(1.9)
   end
@@ -398,12 +406,45 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_in_delta Math::PI / 4, atan(1, 1), 0.001
   end
 
+  test "trig functions and atan work component-wise for vectors" do
+    angles = Larb::Vec2.new(0, Math::PI / 2)
+    sines = sin(angles)
+    arctan = atan(Larb::Vec2.new(0, 1), Larb::Vec2.new(1, 1))
+
+    assert_in_delta 0.0, sines.x, 0.001
+    assert_in_delta 1.0, sines.y, 0.001
+    assert_in_delta 0.0, arctan.x, 0.001
+    assert_in_delta Math::PI / 4, arctan.y, 0.001
+  end
+
   test "min returns minimum" do
     assert_equal 1, min(1, 2, 3)
   end
 
   test "max returns maximum" do
     assert_equal 3, max(1, 2, 3)
+  end
+
+  test "smoothstep step fract mod min and max work for vectors" do
+    smooth = smoothstep(0.0, 1.0, Larb::Vec2.new(0.25, 0.75))
+    stepped = step(Larb::Vec2.new(0.5, 0.5), Larb::Vec2.new(0.25, 0.75))
+    fractured = fract(Larb::Vec2.new(1.25, 2.75))
+    modded = mod(Larb::Vec2.new(5.0, 7.0), 2.0)
+    minimum = min(Larb::Vec2.new(3.0, 1.0), Larb::Vec2.new(2.0, 4.0))
+    maximum = max(Larb::Vec2.new(3.0, 1.0), 2.5)
+
+    assert_in_delta 0.15625, smooth.x, 0.001
+    assert_in_delta 0.84375, smooth.y, 0.001
+    assert_equal 0.0, stepped.x
+    assert_equal 1.0, stepped.y
+    assert_in_delta 0.25, fractured.x, 0.001
+    assert_in_delta 0.75, fractured.y, 0.001
+    assert_in_delta 1.0, modded.x, 0.001
+    assert_in_delta 1.0, modded.y, 0.001
+    assert_equal 2.0, minimum.x
+    assert_equal 1.0, minimum.y
+    assert_equal 3.0, maximum.x
+    assert_equal 2.5, maximum.y
   end
 
   test "texture samples through the texture object" do
