@@ -49,8 +49,7 @@ module RBGL
           window = @windows[@handle]
           return unless window
 
-          buffer_object = next_available_buffer(window)
-          return unless buffer_object
+          buffer_object = wait_for_available_buffer(window)
 
           buffer = convert_to_wayland_format(framebuffer)
           buffer_object.write(buffer)
@@ -136,6 +135,23 @@ module RBGL
 
         def next_available_buffer(window)
           window.fetch(:buffers, [window[:shm_buffer]].compact).find(&:available?)
+        end
+
+        def wait_for_available_buffer(window)
+          loop do
+            buffer = next_available_buffer(window)
+            return buffer if buffer
+
+            pump_connection(timeout: 0.016)
+          end
+        end
+
+        def pump_connection(timeout:)
+          if @connection.respond_to?(:pump_events)
+            @connection.pump_events(timeout: timeout)
+          else
+            sleep(timeout)
+          end
         end
 
         def create_shm_buffers(width, height, count = 2)

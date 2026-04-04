@@ -299,7 +299,18 @@ module RBGL
         end
 
         def dispatch_pending
-          while IO.select([@socket], nil, nil, 0)
+          pump_events(timeout: 0)
+
+          events = @pending_events
+          @pending_events = []
+          events
+        end
+
+        def pump_events(timeout: nil)
+          ready = IO.select([@socket], nil, nil, timeout)
+          return 0 unless ready
+
+          loop do
             header = @socket.read(8)
             break unless header && header.bytesize == 8
 
@@ -309,11 +320,11 @@ module RBGL
 
             payload = size > 8 ? @socket.read(size - 8) : ""
             handle_event(object_id, opcode, payload)
+
+            break unless IO.select([@socket], nil, nil, 0)
           end
 
-          events = @pending_events
-          @pending_events = []
-          events
+          @pending_events.length
         end
 
         def roundtrip
@@ -322,8 +333,7 @@ module RBGL
           flush
 
           until callback.done?
-            dispatch_pending
-            sleep 0.001
+            pump_events(timeout: 0.01)
           end
         end
 

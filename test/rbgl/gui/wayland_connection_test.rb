@@ -403,6 +403,51 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_equal free_buffer, backend.instance_variable_get(:@windows)[10][:shm_buffer]
   end
 
+  test "present waits for a released shm buffer instead of dropping the frame" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    framebuffer = RBGL::Engine::Framebuffer.new(2, 2)
+    written = []
+    attached = []
+    pump_calls = 0
+    available = false
+
+    buffer = Object.new
+    buffer.define_singleton_method(:available?) { available }
+    buffer.define_singleton_method(:write) { |data| written << data }
+    buffer.define_singleton_method(:mark_in_use) { available = false }
+
+    surface = Object.new
+    surface.define_singleton_method(:damage) { |_x, _y, _w, _h| }
+    surface.define_singleton_method(:attach) { |current, _x, _y| attached << current }
+    surface.define_singleton_method(:commit) { }
+
+    connection = Object.new
+    connection.define_singleton_method(:flush) { }
+    connection.define_singleton_method(:pump_events) do |timeout:|
+      pump_calls += 1
+      available = true if timeout.positive?
+    end
+
+    backend.instance_variable_set(:@connection, connection)
+    backend.instance_variable_set(:@handle, 10)
+    backend.instance_variable_set(
+      :@windows,
+      {
+        10 => {
+          surface: surface,
+          buffers: [buffer],
+          shm_buffer: buffer
+        }
+      }
+    )
+
+    backend.present(framebuffer)
+
+    assert_equal 1, pump_calls
+    assert_equal 1, written.size
+    assert_equal [buffer], attached
+  end
+
   test "create_shm_buffer wraps the file, pool, and wl_buffer" do
     backend = RBGL::GUI::Wayland::Backend.allocate
     tempfile = Tempfile.new("rbgl-wayland-test")
