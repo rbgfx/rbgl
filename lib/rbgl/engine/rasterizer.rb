@@ -3,6 +3,7 @@
 require_relative "rasterizer/attribute_interpolator"
 require_relative "rasterizer/triangle_renderer"
 require_relative "rasterizer/line_renderer"
+require_relative "rasterizer/point_renderer"
 
 module RBGL
   module Engine
@@ -23,6 +24,11 @@ module RBGL
           framebuffer,
           interpolator: @attribute_interpolator,
           viewport_transform: method(:viewport_transform)
+        )
+        @point_renderer = PointRenderer.new(
+          framebuffer,
+          viewport_transform: method(:viewport_transform),
+          point_pixel_offsets: method(:point_pixel_offsets)
         )
       end
 
@@ -50,25 +56,14 @@ module RBGL
         ))
       end
 
-      def rasterize_point(vertex, fragment_shader, uniforms, cull_mode: :none, size: 1,
+      def rasterize_point(vertex, fragment_shader, uniforms, size: 1,
                           depth_test: true, depth_write: true, blend_mode: :none)
-        p = viewport_transform(vertex[:position])
-        x = p.x.round
-        y = p.y.round
-        depth = p.z
-
-        x_offsets, y_offsets = point_pixel_offsets(size)
-        y_offsets.each do |dy|
-          x_offsets.each do |dx|
-            frag_output = fragment_shader.process(vertex, uniforms)
-            @framebuffer.write_pixel(
-              x + dx, y + dy, frag_output[:color], depth,
-              depth_test: depth_test,
-              depth_write: depth_write,
-              blend_mode: blend_mode
-            )
-          end
-        end
+        @point_renderer.rasterize(vertex, fragment_shader, uniforms, {
+          size: size,
+          depth_test: depth_test,
+          depth_write: depth_write,
+          blend_mode: blend_mode
+        })
       end
 
       private

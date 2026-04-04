@@ -171,7 +171,14 @@ module RBGL
       def draw_point(v)
         return unless v && point_visible?(v)
 
-        @rasterizer.rasterize_point(v, @pipeline.fragment_shader, @uniforms, **rasterizer_state)
+        @rasterizer.rasterize_point(
+          v,
+          @pipeline.fragment_shader,
+          @uniforms,
+          depth_test: @pipeline.depth_test,
+          depth_write: @pipeline.depth_write,
+          blend_mode: @pipeline.blend_mode
+        )
       end
 
       def clip_triangle(v0, v1, v2)

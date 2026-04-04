@@ -108,6 +108,22 @@ class RasterizerTest < Test::Unit::TestCase
     assert_equal 4, colored_pixel_count
   end
 
+  test "rasterize_point delegates to point renderer" do
+    v = create_vertex(0.0, 0.0, 0.0)
+    calls = []
+    point_renderer = Object.new
+    point_renderer.define_singleton_method(:rasterize) do |vertex, fragment_shader, uniforms, state|
+      calls << [vertex, fragment_shader, uniforms, state]
+    end
+    @rasterizer.instance_variable_set(:@point_renderer, point_renderer)
+
+    @rasterizer.rasterize_point(v, @fragment_shader, @uniforms, size: 3, depth_test: false, blend_mode: :alpha)
+
+    assert_equal 1, calls.size
+    assert_equal v, calls[0][0]
+    assert_equal({ size: 3, depth_test: false, depth_write: true, blend_mode: :alpha }, calls[0][3])
+  end
+
   test "interpolate_value handles supported attribute types" do
     vec2 = @rasterizer.send(
       :interpolate_value,
