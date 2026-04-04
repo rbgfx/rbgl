@@ -87,6 +87,8 @@ module RBGL
             Event.new(:mouse_release, x: raw[:x], y: raw[:y], button: raw[:button])
           when :mouse_move
             Event.new(:mouse_move, x: raw[:x], y: raw[:y])
+          when :resize
+            Event.new(:resize, width: raw[:width], height: raw[:height])
           else
             nil
           end

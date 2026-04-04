@@ -11,13 +11,18 @@ module RBGL
         end
 
         def process
-          Array(@backend.poll_events).each do |event|
+          Array(poll_events).each do |event|
             next unless event.is_a?(Event)
 
             @on_resize.call(event) if event.type == :resize
-            @backend.dispatch_event(event)
             @event_handlers[event.type].each { |handler| handler.call(event) }
           end
+        end
+
+        private
+
+        def poll_events
+          @backend.poll_events
         end
       end
     end

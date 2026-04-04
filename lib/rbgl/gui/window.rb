@@ -28,15 +28,18 @@ module RBGL
       end
 
       def on_key(&block)
-        @backend.on_key(&block)
+        register_key_handler(:key_press, :press, &block)
+        register_key_handler(:key_release, :release, &block)
       end
 
       def on_mouse(&block)
-        @backend.on_mouse(&block)
+        register_mouse_handler(:mouse_press, :press, &block)
+        register_mouse_handler(:mouse_release, :release, &block)
+        register_mouse_handler(:mouse_move, :move, &block)
       end
 
       def on_resize(&block)
-        @backend.on_resize(&block)
+        on(:resize) { |event| block.call(event.width, event.height) }
       end
 
       def run(&frame_callback)
@@ -101,6 +104,14 @@ module RBGL
         @height = event.height
         @context.resize(width: event.width, height: event.height)
         @backend.resize(event.width, event.height)
+      end
+
+      def register_key_handler(event_type, action, &block)
+        on(event_type) { |event| block.call(event.key, action) }
+      end
+
+      def register_mouse_handler(event_type, action, &block)
+        on(event_type) { |event| block.call(event.x, event.y, event[:button], action) }
       end
     end
   end
