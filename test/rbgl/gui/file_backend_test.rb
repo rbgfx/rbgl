@@ -28,9 +28,29 @@ class FileBackendTest < Test::Unit::TestCase
     assert File.exist?(File.join(@tmpdir, "frame_00000.bmp"))
   end
 
+  test "accepts string ppm mode values" do
+    backend = RBGL::GUI::FileBackend.new(10, 10, "Test", ppm_mode: "binary", output_dir: @tmpdir)
+
+    backend.present(@fb)
+
+    assert File.exist?(File.join(@tmpdir, "frame_00000.ppm"))
+  end
+
   test "rejects unsupported formats" do
     assert_raise(ArgumentError) do
       RBGL::GUI::FileBackend.new(10, 10, "Test", format: :png, output_dir: @tmpdir)
+    end
+  end
+
+  test "rejects unsupported ppm modes" do
+    assert_raise(ArgumentError) do
+      RBGL::GUI::FileBackend.new(10, 10, "Test", ppm_mode: :raw, output_dir: @tmpdir)
+    end
+  end
+
+  test "rejects ppm mode for non ppm format" do
+    assert_raise(ArgumentError) do
+      RBGL::GUI::FileBackend.new(10, 10, "Test", format: :bmp, ppm_mode: :binary, output_dir: @tmpdir)
     end
   end
 
@@ -59,8 +79,8 @@ class FileBackendTest < Test::Unit::TestCase
     assert File.exist?(File.join(@tmpdir, "frame_00001.ppm"))
   end
 
-  test "present with binary PPM format" do
-    backend = RBGL::GUI::FileBackend.new(10, 10, "Test", format: :ppm_binary, output_dir: @tmpdir)
+  test "present with binary PPM mode" do
+    backend = RBGL::GUI::FileBackend.new(10, 10, "Test", format: :ppm, ppm_mode: :binary, output_dir: @tmpdir)
     backend.present(@fb)
     assert File.exist?(File.join(@tmpdir, "frame_00000.ppm"))
   end

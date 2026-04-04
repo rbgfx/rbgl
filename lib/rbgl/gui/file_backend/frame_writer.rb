@@ -4,12 +4,10 @@ module RBGL
   module GUI
     class FileBackend < Backend
       class FrameWriter
-        def self.build(format)
+        def self.build(format, ppm_mode: :ascii)
           case format
           when :ppm
-            PpmWriter.new(binary: false)
-          when :ppm_binary
-            PpmWriter.new(binary: true)
+            PpmWriter.new(binary: ppm_mode == :binary)
           when :bmp
             BmpWriter.new
           else

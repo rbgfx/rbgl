@@ -7,12 +7,14 @@ require_relative "file_backend/bmp_writer"
 module RBGL
   module GUI
     class FileBackend < Backend
-      SUPPORTED_FORMATS = %i[ppm ppm_binary bmp].freeze
+      SUPPORTED_FORMATS = %i[ppm bmp].freeze
+      PPM_MODES = %i[ascii binary].freeze
 
-      def initialize(width, height, title = "RBGL", format: :ppm, output_dir: ".")
+      def initialize(width, height, title = "RBGL", format: :ppm, ppm_mode: :ascii, output_dir: ".")
         super(width, height, title)
         @format = normalize_format(format)
-        @writer = FrameWriter.build(@format)
+        @ppm_mode = normalize_ppm_mode(ppm_mode, @format)
+        @writer = FrameWriter.build(@format, ppm_mode: @ppm_mode)
         @output_dir = output_dir
         @frame_count = 0
         @should_close = false
@@ -51,6 +53,14 @@ module RBGL
         return normalized if SUPPORTED_FORMATS.include?(normalized)
 
         raise ArgumentError, "Unsupported file backend format: #{format}"
+      end
+
+      def normalize_ppm_mode(ppm_mode, format)
+        normalized = ppm_mode.to_sym
+        raise ArgumentError, "Unsupported PPM mode: #{ppm_mode}" unless PPM_MODES.include?(normalized)
+        return normalized if format == :ppm || normalized == :ascii
+
+        raise ArgumentError, "PPM mode is only supported with :ppm format"
       end
     end
   end
