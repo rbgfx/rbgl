@@ -20,6 +20,20 @@ class FileBackendTest < Test::Unit::TestCase
     assert_equal 480, backend.height
   end
 
+  test "accepts string format values" do
+    backend = RBGL::GUI::FileBackend.new(10, 10, "Test", format: "bmp", output_dir: @tmpdir)
+
+    backend.present(@fb)
+
+    assert File.exist?(File.join(@tmpdir, "frame_00000.bmp"))
+  end
+
+  test "rejects unsupported formats" do
+    assert_raise(ArgumentError) do
+      RBGL::GUI::FileBackend.new(10, 10, "Test", format: :png, output_dir: @tmpdir)
+    end
+  end
+
   test "should_close? returns false initially" do
     assert_false @backend.should_close?
   end

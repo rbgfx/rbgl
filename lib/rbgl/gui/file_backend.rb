@@ -3,9 +3,11 @@
 module RBGL
   module GUI
     class FileBackend < Backend
+      SUPPORTED_FORMATS = %i[ppm ppm_binary bmp].freeze
+
       def initialize(width, height, title = "RBGL", format: :ppm, output_dir: ".")
         super(width, height, title)
-        @format = format
+        @format = normalize_format(format)
         @output_dir = output_dir
         @frame_count = 0
         @should_close = false
@@ -14,15 +16,7 @@ module RBGL
 
       def present(framebuffer)
         filename = File.join(@output_dir, format("frame_%05d.#{@format}", @frame_count))
-
-        case @format
-        when :ppm
-          File.write(filename, framebuffer.to_ppm)
-        when :ppm_binary
-          File.binwrite(filename, framebuffer.to_ppm_binary)
-        when :bmp
-          File.binwrite(filename, to_bmp(framebuffer))
-        end
+        write_frame(filename, framebuffer)
 
         @frame_count += 1
 
@@ -46,6 +40,34 @@ module RBGL
       end
 
       private
+
+      def normalize_format(format)
+        normalized = format.to_sym
+        return normalized if SUPPORTED_FORMATS.include?(normalized)
+
+        raise ArgumentError, "Unsupported file backend format: #{format}"
+      end
+
+      def write_frame(filename, framebuffer)
+        data, binary = encoded_frame(framebuffer)
+
+        if binary
+          File.binwrite(filename, data)
+        else
+          File.write(filename, data)
+        end
+      end
+
+      def encoded_frame(framebuffer)
+        case @format
+        when :ppm
+          [framebuffer.to_ppm, false]
+        when :ppm_binary
+          [framebuffer.to_ppm_binary, true]
+        when :bmp
+          [to_bmp(framebuffer), true]
+        end
+      end
 
       def to_bmp(framebuffer)
         w = framebuffer.width
