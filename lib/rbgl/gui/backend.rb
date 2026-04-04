@@ -26,6 +26,11 @@ module RBGL
         []
       end
 
+      def resize(width, height)
+        @width = width
+        @height = height
+      end
+
       def should_close?
         raise NotImplementedError
       end

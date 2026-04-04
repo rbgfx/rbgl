@@ -274,6 +274,40 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_nil backend.instance_variable_get(:@handle)
   end
 
+  test "resize recreates shm buffer for the current window" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    old_buffer_destroyed = false
+    old_buffer = Object.new
+    new_buffer = Object.new
+    old_buffer.define_singleton_method(:destroy) { old_buffer_destroyed = true }
+
+    backend.instance_variable_set(:@handle, 10)
+    backend.instance_variable_set(
+      :@windows,
+      {
+        10 => {
+          shm_buffer: old_buffer,
+          width: 100,
+          height: 80
+        }
+      }
+    )
+
+    created = []
+    backend.define_singleton_method(:create_shm_buffer) do |width, height|
+      created << [width, height]
+      new_buffer
+    end
+
+    backend.resize(320, 200)
+
+    assert_equal [[320, 200]], created
+    assert_true old_buffer_destroyed
+    assert_equal new_buffer, backend.instance_variable_get(:@windows)[10][:shm_buffer]
+    assert_equal 320, backend.width
+    assert_equal 200, backend.height
+  end
+
   test "create_shm_buffer wraps the file, pool, and wl_buffer" do
     backend = RBGL::GUI::Wayland::Backend.allocate
     tempfile = Tempfile.new("rbgl-wayland-test")

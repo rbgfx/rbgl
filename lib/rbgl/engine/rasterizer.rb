@@ -10,6 +10,10 @@ module RBGL
         @viewport = { x: 0, y: 0, width: framebuffer.width, height: framebuffer.height }
       end
 
+      def resize(width, height)
+        @viewport = @viewport.merge(width: width, height: height)
+      end
+
       def rasterize_triangle(v0, v1, v2, fragment_shader, uniforms, cull_mode: :none,
                              depth_test: true, depth_write: true, blend_mode: :none)
         p0 = viewport_transform(v0[:position])

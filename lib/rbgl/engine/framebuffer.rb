@@ -12,6 +12,13 @@ module RBGL
         @depth_buffer = Array.new(width * height) { Float::INFINITY }
       end
 
+      def resize(width, height)
+        @width = width
+        @height = height
+        @color_buffer = Array.new(width * height) { Larb::Color.black }
+        @depth_buffer = Array.new(width * height) { Float::INFINITY }
+      end
+
       def get_pixel(x, y)
         return nil if x < 0 || x >= @width || y < 0 || y >= @height
 

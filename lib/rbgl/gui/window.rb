@@ -106,9 +106,17 @@ module RBGL
         Array(@backend.poll_events).each do |event|
           next unless event.is_a?(Event)
 
+          apply_resize(event) if event.type == :resize
           @backend.dispatch_event(event)
           @event_handlers[event.type].each { |handler| handler.call(event) }
         end
+      end
+
+      def apply_resize(event)
+        @width = event.width
+        @height = event.height
+        @context.resize(width: event.width, height: event.height)
+        @backend.resize(event.width, event.height)
       end
     end
   end

@@ -22,6 +22,20 @@ class FramebufferTest < Test::Unit::TestCase
     assert_equal Float::INFINITY, @fb.depth_buffer[0]
   end
 
+  test "resize updates dimensions and clears buffers" do
+    @fb.set_pixel(1, 1, Larb::Color.white)
+    @fb.set_depth(1, 1, 0.5)
+
+    @fb.resize(4, 3)
+
+    assert_equal 4, @fb.width
+    assert_equal 3, @fb.height
+    assert_equal 12, @fb.color_buffer.size
+    assert_equal 12, @fb.depth_buffer.size
+    assert_equal Float::INFINITY, @fb.get_depth(0, 0)
+    assert_equal 0.0, @fb.get_pixel(0, 0).r
+  end
+
   test "get_pixel returns color at position" do
     color = @fb.get_pixel(0, 0)
     assert_kind_of Larb::Color, color

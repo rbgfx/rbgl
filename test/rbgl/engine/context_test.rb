@@ -63,6 +63,13 @@ class ContextTest < Test::Unit::TestCase
     assert_equal 0.0, @ctx.framebuffer.get_pixel(50, 50).r
   end
 
+  test "resize updates framebuffer dimensions" do
+    @ctx.resize(width: 64, height: 48)
+
+    assert_equal 64, @ctx.width
+    assert_equal 48, @ctx.height
+  end
+
   test "draw_arrays raises without pipeline" do
     @ctx.bind_vertex_buffer(@vb)
     assert_raise(RuntimeError) do

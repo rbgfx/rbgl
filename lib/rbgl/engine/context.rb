@@ -38,6 +38,11 @@ module RBGL
         @framebuffer.clear(color: color, depth: depth)
       end
 
+      def resize(width:, height:)
+        @framebuffer.resize(width, height)
+        @rasterizer.resize(width, height)
+      end
+
       def draw_arrays(mode, first, count)
         validate_draw_state!
         draw_vertices(mode, first...first + count)

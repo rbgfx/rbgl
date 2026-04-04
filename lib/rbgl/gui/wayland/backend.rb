@@ -59,6 +59,21 @@ module RBGL
           @connection.dispatch_pending.filter_map { |event| convert_event(event) }
         end
 
+        def resize(width, height)
+          super
+          return unless @handle
+
+          window = @windows[@handle]
+          return unless window
+          return if window[:width] == width && window[:height] == height
+
+          old_buffer = window[:shm_buffer]
+          window[:shm_buffer] = create_shm_buffer(width, height)
+          window[:width] = width
+          window[:height] = height
+          old_buffer.destroy
+        end
+
         def should_close?
           return false unless @handle
 

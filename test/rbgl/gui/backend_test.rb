@@ -34,6 +34,15 @@ class BackendTest < Test::Unit::TestCase
     assert_equal [], backend.poll_events_raw
   end
 
+  test "resize updates backend dimensions" do
+    backend = RBGL::GUI::Backend.new(640, 480)
+
+    backend.resize(800, 600)
+
+    assert_equal 800, backend.width
+    assert_equal 600, backend.height
+  end
+
   test "should_close? raises NotImplementedError" do
     backend = RBGL::GUI::Backend.new(640, 480)
     assert_raise(NotImplementedError) do

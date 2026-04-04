@@ -209,6 +209,7 @@ end
 
 class SpyWindowBackend < RBGL::GUI::Backend
   attr_reader :presented_framebuffers, :set_pixels_args, :close_count, :key_handler, :mouse_handler, :resize_handler
+  attr_reader :resize_calls
   attr_writer :should_close, :poll_events_result, :raw_events, :metal_available_value, :native_handle_value
 
   def initialize(width, height, title = "RBGL")
@@ -220,6 +221,7 @@ class SpyWindowBackend < RBGL::GUI::Backend
     @close_count = 0
     @metal_available_value = false
     @native_handle_value = nil
+    @resize_calls = []
   end
 
   def present(framebuffer)
@@ -245,6 +247,11 @@ class SpyWindowBackend < RBGL::GUI::Backend
 
   def set_pixels(buffer, width, height)
     @set_pixels_args = [buffer, width, height]
+  end
+
+  def resize(width, height)
+    @resize_calls << [width, height]
+    super
   end
 
   def metal_available?
@@ -425,5 +432,23 @@ class WindowRunTest < Test::Unit::TestCase
     window.send(:process_events)
 
     assert_equal [[:first, 65], [:second, 65]], received
+  end
+
+  test "process_events applies resize events before dispatching callbacks" do
+    backend = SpyWindowBackend.new(100, 100)
+    backend.poll_events_result = [RBGL::GUI::Event.new(:resize, width: 320, height: 240)]
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    callback_dims = nil
+    window.on_resize { |width, height| callback_dims = [width, height, window.width, window.height] }
+
+    window.send(:process_events)
+
+    assert_equal 320, window.width
+    assert_equal 240, window.height
+    assert_equal 320, window.context.width
+    assert_equal 240, window.context.height
+    assert_equal [[320, 240]], backend.resize_calls
+    assert_equal [320, 240, 320, 240], callback_dims
   end
 end
