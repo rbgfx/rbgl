@@ -66,6 +66,12 @@ class TextureTest < Test::Unit::TestCase
     assert_equal red, @tex.get_pixel(2, 2)
   end
 
+  test "set_pixel rejects unsupported pixel types" do
+    assert_raise(ArgumentError) do
+      @tex.set_pixel(1, 1, :red)
+    end
+  end
+
   test "set_pixel ignores out of bounds" do
     red = Larb::Color.new(1.0, 0.0, 0.0, 1.0)
     @tex.set_pixel(-1, 0, red)

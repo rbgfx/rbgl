@@ -48,7 +48,7 @@ module RBGL
       def set_pixel(x, y, color)
         return if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @data[y.to_i * @width + x.to_i] = color
+        @data[y.to_i * @width + x.to_i] = validate_color!(color)
         @mipmaps_dirty = true
       end
 
@@ -162,11 +162,13 @@ module RBGL
           raise ArgumentError, "Texture data size mismatch: expected #{expected_size}, got #{normalized.size}"
         end
 
-        unless normalized.all? { |pixel| pixel.is_a?(Larb::Color) }
-          raise ArgumentError, "Texture data must contain only Larb::Color values"
-        end
+        normalized.map { |pixel| validate_color!(pixel) }
+      end
 
-        normalized
+      def validate_color!(color)
+        return color if color.is_a?(Larb::Color)
+
+        raise ArgumentError, "Texture data must contain only Larb::Color values"
       end
 
       def wrap_coord(coord, mode)
