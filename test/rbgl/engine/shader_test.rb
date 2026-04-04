@@ -38,12 +38,18 @@ class ShaderIOTest < Test::Unit::TestCase
     assert_true io.respond_to?(:anything=)
     assert_false io.respond_to?(:missing)
   end
+
+  test "raises on missing getter methods" do
+    io = RBGL::Engine::ShaderIO.new
+
+    assert_raise(NoMethodError) { io.missing }
+  end
 end
 
 class UniformsTest < Test::Unit::TestCase
   test "initializes with empty data" do
     uniforms = RBGL::Engine::Uniforms.new
-    assert_nil uniforms.time
+    assert_nil uniforms[:time]
   end
 
   test "initializes with hash" do
@@ -84,6 +90,12 @@ class UniformsTest < Test::Unit::TestCase
     assert_true uniforms.respond_to?(:time)
     assert_true uniforms.respond_to?(:time=)
     assert_false uniforms.respond_to?(:missing)
+  end
+
+  test "raises on missing getter methods" do
+    uniforms = RBGL::Engine::Uniforms.new
+
+    assert_raise(NoMethodError) { uniforms.time }
   end
 end
 

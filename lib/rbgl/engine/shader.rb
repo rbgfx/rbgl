@@ -11,7 +11,7 @@ module RBGL
       def method_missing(name, *args)
         if writer_method?(name)
           self[writer_key(name)] = args.first
-        elsif args.empty?
+        elsif args.empty? && @data.key?(normalize_key(name))
           self[name]
         else
           super
