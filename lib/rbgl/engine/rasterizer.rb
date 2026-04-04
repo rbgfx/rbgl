@@ -57,9 +57,9 @@ module RBGL
         y = p.y.round
         depth = p.z
 
-        half = size / 2
-        (-half..half).each do |dy|
-          (-half..half).each do |dx|
+        x_offsets, y_offsets = point_pixel_offsets(size)
+        y_offsets.each do |dy|
+          x_offsets.each do |dx|
             frag_output = fragment_shader.process(vertex, uniforms)
             @framebuffer.write_pixel(
               x + dx, y + dy, frag_output[:color], depth,
@@ -115,6 +115,14 @@ module RBGL
           depth_write: depth_write,
           blend_mode: blend_mode
         }
+      end
+
+      def point_pixel_offsets(size)
+        pixel_size = [size.to_i, 1].max
+        min_offset = -(pixel_size / 2.0).floor
+        max_offset = ((pixel_size - 1) / 2.0).floor
+        offsets = (min_offset..max_offset).to_a
+        [offsets, offsets]
       end
     end
   end

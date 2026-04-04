@@ -96,6 +96,16 @@ class RasterizerTest < Test::Unit::TestCase
     v = create_vertex(0.0, 0.0, 0.0)
 
     @rasterizer.rasterize_point(v, @fragment_shader, @uniforms, size: 5)
+
+    assert_equal 25, colored_pixel_count
+  end
+
+  test "rasterize_point with even size uses exact pixel footprint" do
+    v = create_vertex(0.0, 0.0, 0.0)
+
+    @rasterizer.rasterize_point(v, @fragment_shader, @uniforms, size: 2)
+
+    assert_equal 4, colored_pixel_count
   end
 
   test "interpolate_value handles supported attribute types" do
@@ -206,5 +216,9 @@ class RasterizerTest < Test::Unit::TestCase
     io[:position] = Larb::Vec4.new(x, y, z, 1.0)
     io[:color] = Larb::Color.new(1, 1, 1, 1)
     io
+  end
+
+  def colored_pixel_count
+    @fb.color_buffer.count { |color| color.r.positive? || color.g.positive? || color.b.positive? }
   end
 end
