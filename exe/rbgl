@@ -1,0 +1,42 @@
+#!/usr/bin/env ruby
+
+# frozen_string_literal: true
+
+require "optparse"
+
+lib_path = File.expand_path("../lib", __dir__)
+$LOAD_PATH.unshift(lib_path) unless $LOAD_PATH.include?(lib_path)
+
+require "rbgl"
+require "rbgl/cli/doctor"
+
+module RBGLCLI
+  def self.run(argv = ARGV, stdout: $stdout, stderr: $stderr)
+    options = { json: false }
+
+    parser = OptionParser.new do |parser|
+      parser.banner = "Usage: rbgl <command>\n\nCommands:\n  doctor [--json]\n"
+      parser.on("--json", "Output JSON") { options[:json] = true }
+      parser.on("-h", "--help", "Show this help") do
+        stdout.puts parser
+        return 0
+      end
+    end
+
+    parser.parse!(argv)
+
+    command = argv.shift
+    unless command == "doctor"
+      stderr.puts parser
+      return 1
+    end
+
+    RBGL::CLI::Doctor.new(json: options[:json], io: stdout).run
+  rescue OptionParser::InvalidOption, OptionParser::MissingArgument => error
+    stderr.puts error.message
+    stderr.puts parser
+    1
+  end
+end
+
+exit RBGLCLI.run
