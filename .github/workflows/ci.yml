@@ -31,3 +31,10 @@ jobs:
           bundler-cache: true
       - name: Run tests
         run: bundle exec rake test
+      - name: Run packaging smoke test
+        run: |
+          gem build rbgl.gemspec
+          gem install --local rbgl-*.gem
+          ruby -e 'require "rbgl"; puts RBGL::VERSION'
+      - name: Run doctor (headless-safe)
+        run: ruby exe/rbgl doctor --json
