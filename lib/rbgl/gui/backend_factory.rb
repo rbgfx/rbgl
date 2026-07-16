@@ -43,14 +43,18 @@ module RBGL
             FileBackend.new(width, height, title, **options)
           when :x11
             require_relative "x11/backend"
-            X11::Backend.new(width, height, title, env: env)
+            X11::Backend.new(width, height, title, env: env, **options)
           when :wayland
             require_relative "wayland/backend"
-            Wayland::Backend.new(width, height, title, env: env)
+            Wayland::Backend.new(width, height, title, env: env, **options)
           when :cocoa
             require_relative "cocoa/backend"
-            Cocoa::Backend.new(width, height, title, env: env)
+            Cocoa::Backend.new(width, height, title, env: env, **options)
           when Backend
+            unless options.empty?
+              raise ArgumentError, "Backend instances do not accept construction options: #{options.keys.join(', ')}"
+            end
+
             backend
           else
             raise BackendSelectionError, "Unknown backend: #{backend}"

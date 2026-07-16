@@ -21,6 +21,12 @@ class EventTest < Test::Unit::TestCase
     assert_equal "a", event.char
   end
 
+  test "does not ignore arguments passed to data accessors" do
+    event = RBGL::GUI::Event.new(:mouse_move, x: 100)
+
+    assert_raise(NoMethodError) { event.x(999) }
+  end
+
   test "respond_to_missing returns true for data keys" do
     event = RBGL::GUI::Event.new(:key_press, key: 65)
     assert event.respond_to?(:key)

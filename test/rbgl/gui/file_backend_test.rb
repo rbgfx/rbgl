@@ -20,6 +20,22 @@ class FileBackendTest < Test::Unit::TestCase
     assert_equal 480, backend.height
   end
 
+  test "creates nested output directories" do
+    output_dir = File.join(@tmpdir, "nested", "frames")
+    backend = RBGL::GUI::FileBackend.new(10, 10, output_dir: output_dir)
+
+    backend.present(@fb)
+
+    assert File.exist?(File.join(output_dir, "frame_00000.ppm"))
+  end
+
+  test "defaults to one frame as a file output safety limit" do
+    @backend.present(@fb)
+
+    assert_true @backend.should_close?
+    assert_equal 1, @backend.max_frames
+  end
+
   test "accepts string format values" do
     backend = RBGL::GUI::FileBackend.new(10, 10, "Test", format: "bmp", output_dir: @tmpdir)
 
@@ -102,5 +118,18 @@ class FileBackendTest < Test::Unit::TestCase
     assert_false @backend.should_close?
     @backend.present(@fb)
     assert_true @backend.should_close?
+  end
+
+  test "max_frames writer accepts nil for explicit unlimited output" do
+    @backend.max_frames = nil
+
+    2.times { @backend.present(@fb) }
+
+    assert_false @backend.should_close?
+  end
+
+  test "max_frames writer rejects non-positive limits" do
+    assert_raise(ArgumentError) { @backend.max_frames = 0 }
+    assert_raise(ArgumentError) { @backend.max_frames = "invalid" }
   end
 end

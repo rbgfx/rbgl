@@ -27,6 +27,20 @@ class BackendFactoryTest < Test::Unit::TestCase
     )
   end
 
+  test "build rejects construction options for backend instances" do
+    backend = RBGL::GUI::FileBackend.new(32, 32)
+
+    assert_raise(ArgumentError) do
+      RBGL::GUI::BackendFactory.build(
+        backend,
+        width: 32,
+        height: 32,
+        title: "Ignored",
+        unexpected: true
+      )
+    end
+  end
+
   test "native_backend_candidates prefer wayland when available" do
     candidates = RBGL::GUI::BackendFactory.send(
       :native_backend_candidates,
@@ -211,11 +225,13 @@ class BackendFactoryTest < Test::Unit::TestCase
       width: 64,
       height: 48,
       title: "Test",
-      env: env
+      env: env,
+      roundtrip_timeout: 2.0
     )
 
     assert_same fake_backend, result
     assert_equal env, calls.first[1][:env]
+    assert_equal 2.0, calls.first[1][:roundtrip_timeout]
   ensure
     next unless backend_class&.method_defined?(backup)
 

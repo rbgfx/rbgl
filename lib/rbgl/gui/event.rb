@@ -14,8 +14,10 @@ module RBGL
         @data[key]
       end
 
-      def method_missing(name, *args)
-        @data.key?(name) ? @data[name] : super
+      def method_missing(name, *args, &block)
+        return @data[name] if args.empty? && block.nil? && @data.key?(name)
+
+        super
       end
 
       def respond_to_missing?(name, include_private = false)
