@@ -11,6 +11,8 @@ module RBGL
       end
 
       class Backend < GUI::Backend
+        KEY_CODES = { 12 => :q, 53 => :escape }.freeze
+
         def initialize(width, height, title = "RBGL", env: ENV)
           @env = env
           unless METACO_AVAILABLE
@@ -35,12 +37,6 @@ module RBGL
 
           raw_events = Metaco.poll_events(@handle)
           raw_events.filter_map { |event| convert_event(event) }
-        end
-
-        def poll_events_raw
-          return [] unless @handle
-
-          Metaco.poll_events(@handle)
         end
 
         def should_close?
@@ -80,9 +76,9 @@ module RBGL
 
           case type
           when :key_press
-            Event.new(:key_press, key: raw[:key], char: raw[:char])
+            Event.new(:key_press, key: normalize_key(raw[:key], raw[:char]), keycode: raw[:key], char: raw[:char])
           when :key_release
-            Event.new(:key_release, key: raw[:key])
+            Event.new(:key_release, key: normalize_key(raw[:key]), keycode: raw[:key])
           when :mouse_press
             Event.new(:mouse_press, x: raw[:x], y: raw[:y], button: raw[:button])
           when :mouse_release
@@ -94,6 +90,17 @@ module RBGL
           else
             nil
           end
+        end
+
+        def normalize_key(key, char = nil)
+          return key if key.is_a?(Symbol)
+          return KEY_CODES.fetch(key, key) if key.is_a?(Integer)
+
+          text = char.to_s.empty? ? key.to_s : char.to_s
+          return :escape if text == "\e" || text.casecmp?("escape")
+          return text.downcase.to_sym if text.length == 1
+
+          key
         end
       end
     end

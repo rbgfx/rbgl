@@ -23,4 +23,15 @@ class CocoaBackendTest < Test::Unit::TestCase
     assert_equal 640, event.width
     assert_equal 480, event.height
   end
+
+  test "convert_event normalizes Cocoa key codes" do
+    backend = RBGL::GUI::Cocoa::Backend.allocate
+
+    q_event = backend.send(:convert_event, { type: :key_press, key: 12, char: "q" })
+    escape_event = backend.send(:convert_event, { type: :key_release, key: 53 })
+
+    assert_equal :q, q_event.key
+    assert_equal 12, q_event.keycode
+    assert_equal :escape, escape_event.key
+  end
 end
