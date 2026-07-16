@@ -8,7 +8,7 @@ module RBGL
     class Window
       attr_reader :context, :backend, :width, :height
 
-      def initialize(width:, height:, title: "RBGL", backend: :auto, **options)
+      def initialize(width:, height:, title: "RBGL", backend: :auto, target_fps: 60, **options)
         @width = width
         @height = height
         @title = title
@@ -20,7 +20,8 @@ module RBGL
           event_handlers: @event_handlers,
           on_resize: method(:apply_resize)
         )
-        @render_loop = RenderLoop.new
+        @render_loop = RenderLoop.new(target_fps: target_fps)
+        @closed = false
       end
 
       def on(event_type, &block)
@@ -29,6 +30,8 @@ module RBGL
       end
 
       def run(&frame_callback)
+        raise RuntimeError, "Window#run is one-shot and cannot be called after the window is closed" if @closed
+
         @render_loop.run(
           backend: @backend,
           context: @context,
@@ -36,7 +39,7 @@ module RBGL
           &frame_callback
         )
       ensure
-        @backend.close if @backend
+        close if @backend
       end
 
       def stop
@@ -69,7 +72,11 @@ module RBGL
       end
 
       def close
+        return if @closed
+
         @backend.close
+      ensure
+        @closed = true
       end
 
       def fps

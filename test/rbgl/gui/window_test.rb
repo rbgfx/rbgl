@@ -390,6 +390,52 @@ class WindowRunTest < Test::Unit::TestCase
     assert window.fps > 0
   end
 
+  test "render loop throttles to its target frame rate" do
+    times = [0.0, 0.0, 0.005, 0.02, 0.025, 0.04, 0.045]
+    sleeps = []
+    render_loop = RBGL::GUI::Window::RenderLoop.new(
+      time_source: -> { times.shift },
+      sleeper: ->(duration) { sleeps << duration },
+      target_fps: 60
+    )
+    backend = MockLoopBackend.new(100, 100, max_frames: 3)
+    context = RBGL::Engine::Context.new(width: 100, height: 100)
+
+    render_loop.run(backend: backend, context: context, process_events: -> {})
+
+    assert_equal 3, sleeps.length
+    assert_in_delta((1.0 / 60) - 0.005, sleeps.first, 0.0001)
+  end
+
+  test "fps reports a moving one second window" do
+    times = [0.0, 0.0, 0.01, 0.1, 0.11, 1.2, 1.21, 1.3, 1.31]
+    render_loop = RBGL::GUI::Window::RenderLoop.new(
+      time_source: -> { times.shift },
+      sleeper: ->(_duration) {},
+      target_fps: nil
+    )
+    backend = MockLoopBackend.new(100, 100, max_frames: 4)
+    context = RBGL::Engine::Context.new(width: 100, height: 100)
+
+    render_loop.run(backend: backend, context: context, process_events: -> {})
+
+    assert_in_delta 10.0, render_loop.fps, 0.001
+  end
+
+  test "render loop rejects a non-positive target frame rate" do
+    assert_raise(ArgumentError) { RBGL::GUI::Window::RenderLoop.new(target_fps: 0) }
+  end
+
+  test "run fails clearly after the one-shot window closes" do
+    backend = MockLoopBackend.new(100, 100, max_frames: 1)
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend, target_fps: nil)
+
+    window.run
+    error = assert_raise(RuntimeError) { window.run }
+
+    assert_includes error.message, "one-shot"
+  end
+
   test "process_events dispatches events to handlers" do
     backend = MockLoopBackend.new(100, 100, max_frames: 2)
     window = RBGL::GUI::Window.new(
