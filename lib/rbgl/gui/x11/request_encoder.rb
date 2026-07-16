@@ -46,8 +46,7 @@ module RBGL
             value_list << encode_event_mask(values[:event_mask])
           end
 
-          [
-            depth,
+          data = [
             wid,
             parent,
             x, y,
@@ -56,7 +55,9 @@ module RBGL
             WINDOW_CLASSES.fetch(window_class, 0),
             visual,
             mask
-          ].pack("CVVSSSSSVV") + value_list.pack("V*")
+          ].pack("VVs<s<vvvvVV") + value_list.pack("V*")
+
+          [depth, data]
         end
 
         def create_gc_data(gc_id, drawable, values = {})
@@ -85,7 +86,7 @@ module RBGL
             dst_x, dst_y,
             0,
             depth
-          ].pack("VVvvvvCC") + "\x00\x00"
+          ].pack("VVvvs<s<CC") + "\x00\x00"
 
           [format_byte, header, data]
         end
@@ -108,18 +109,11 @@ module RBGL
         end
 
         def request_packet(opcode, data, extra = 0)
-          length = (4 + data.bytesize + 3) / 4
-          header = [opcode, extra, length].pack("CCv")
-          padding = "\x00" * (length * 4 - 4 - data.bytesize)
-          header + data + padding
+          encode_packet(opcode, extra, data)
         end
 
         def request_packet_with_data(opcode, extra, header_data, bulk_data)
-          total_data = header_data + bulk_data
-          length = (4 + total_data.bytesize + 3) / 4
-          header = [opcode, extra, length].pack("CCv")
-          padding = "\x00" * (length * 4 - 4 - total_data.bytesize)
-          header + total_data + padding
+          encode_packet(opcode, extra, header_data + bulk_data)
         end
 
         def pack_property_data(data, format)
@@ -145,8 +139,17 @@ module RBGL
 
         private
 
+        def encode_packet(opcode, extra, data)
+          length = (4 + data.bytesize + 3) / 4
+          raise ArgumentError, "X11 request exceeds the 16-bit core protocol limit" if length > 65_535
+
+          header = [opcode, extra, length].pack("CCv")
+          padding = "\x00" * (length * 4 - 4 - data.bytesize)
+          header + data + padding
+        end
+
         def encode_event_mask(events)
-          Array(events).sum { |event| EVENT_MASKS.fetch(event, 0) }
+          Array(events).sum { |event| EVENT_MASKS.fetch(event) }
         end
       end
     end

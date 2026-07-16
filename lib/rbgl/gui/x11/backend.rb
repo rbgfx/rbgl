@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "connection"
+require_relative "pixel_encoder"
 
 module RBGL
   module GUI
@@ -68,7 +69,8 @@ module RBGL
             height: framebuffer.height,
             dst_x: 0, dst_y: 0,
             depth: @display.root_depth,
-            data: buffer
+            data: buffer,
+            bytes_per_line: pixel_encoder.bytes_per_line
           )
 
           @display.flush
@@ -109,8 +111,18 @@ module RBGL
         private
 
         def convert_to_x11_format(framebuffer)
-          # X11 uses BGRX format (blue, green, red, padding)
-          framebuffer.to_bgra_bytes
+          pixel_encoder.encode(framebuffer)
+        end
+
+        def pixel_encoder
+          @pixel_encoder ||= PixelEncoder.new(
+            bits_per_pixel: @display.bits_per_pixel,
+            scanline_pad: @display.scanline_pad,
+            visual_class: @display.visual_class,
+            red_mask: @display.red_mask,
+            green_mask: @display.green_mask,
+            blue_mask: @display.blue_mask
+          )
         end
 
         def convert_event(raw)

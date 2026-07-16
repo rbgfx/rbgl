@@ -163,14 +163,36 @@ class X11ConnectionTest < Test::Unit::TestCase
       values: {
         back_pixel: 0,
         event_mask: [:exposure, :key_press, :key_release, :button_press,
-                     :button_release, :pointer_motion, :structure_notify, :unknown]
+                     :button_release, :pointer_motion, :structure_notify]
       }
     )
 
     opcode, data, extra = sent
     assert_equal 1, opcode
-    assert_equal 0, extra
-    assert_equal 35, data.bytesize
+    assert_equal 24, extra
+    assert_equal 36, data.bytesize
+    assert_equal [2, 3], data.byteslice(8, 4).unpack("s<s<")
+  end
+
+  test "create_window rejects unknown event masks" do
+    connection = build_connection
+
+    assert_raise(KeyError) do
+      connection.create_window(
+        depth: 24,
+        wid: 10,
+        parent: 1,
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        border_width: 0,
+        window_class: :input_output,
+        visual: 99,
+        value_mask: [:event_mask],
+        values: { event_mask: [:unknown] }
+      )
+    end
   end
 
   test "map_window destroy_window and create_gc delegate through send_request" do
@@ -203,11 +225,12 @@ class X11ConnectionTest < Test::Unit::TestCase
         drawable: 1,
         gc: 2,
         width: 3,
-        height: 4,
+        height: 1,
         dst_x: 5,
         dst_y: 6,
         depth: 24,
-        data: "pixels"
+        data: "pixels",
+        bytes_per_line: 6
       )
 
       opcode, extra, header_data, bulk_data = sent.last
@@ -215,6 +238,54 @@ class X11ConnectionTest < Test::Unit::TestCase
       assert_equal expected_extra, extra
       assert_equal "pixels", bulk_data
       assert_equal 20, header_data.bytesize
+    end
+  end
+
+  test "put_image splits image rows to respect the server request limit" do
+    connection = build_connection
+    connection.instance_variable_set(:@maximum_request_length, 10)
+    sent = []
+    connection.define_singleton_method(:send_request_with_data) do |_opcode, _extra, header, data|
+      sent << [header, data]
+    end
+
+    connection.put_image(
+      format: :z_pixmap,
+      drawable: 1,
+      gc: 2,
+      width: 2,
+      height: 5,
+      dst_x: 3,
+      dst_y: 4,
+      depth: 24,
+      data: "x" * 40,
+      bytes_per_line: 8
+    )
+
+    assert_equal 3, sent.size
+    assert_equal [2, 2, 3, 4], sent[0][0].byteslice(8, 8).unpack("vvs<s<")
+    assert_equal [2, 2, 3, 6], sent[1][0].byteslice(8, 8).unpack("vvs<s<")
+    assert_equal [2, 1, 3, 8], sent[2][0].byteslice(8, 8).unpack("vvs<s<")
+    assert_equal [16, 16, 8], sent.map { |_header, data| data.bytesize }
+  end
+
+  test "put_image rejects rows larger than the server request limit" do
+    connection = build_connection
+    connection.instance_variable_set(:@maximum_request_length, 10)
+
+    assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.put_image(
+        format: :z_pixmap,
+        drawable: 1,
+        gc: 2,
+        width: 5,
+        height: 1,
+        dst_x: 0,
+        dst_y: 0,
+        depth: 24,
+        data: "x" * 20,
+        bytes_per_line: 20
+      )
     end
   end
 
@@ -347,17 +418,7 @@ class X11ConnectionTest < Test::Unit::TestCase
 
   test "parse_server_info extracts root screen metadata" do
     connection = build_connection
-    data = "\x00" * 72
-    data[4, 4] = [0x1000].pack("V")
-    data[8, 4] = [0x0FFF].pack("V")
-    data[16, 2] = [0].pack("v")
-    data[20, 1] = [1].pack("C")
-    data[21, 1] = [0].pack("C")
-    data[32, 4] = [10].pack("V")
-    data[40, 4] = [0xFFFFFF].pack("V")
-    data[44, 4] = [0x000000].pack("V")
-    data[64, 4] = [20].pack("V")
-    data[70, 1] = [24].pack("C")
+    data = build_setup_data
 
     connection.send(:parse_server_info, data)
 
@@ -366,6 +427,37 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 10, connection.root
     assert_equal 24, connection.root_depth
     assert_equal 20, connection.root_visual
+    assert_equal 65_535, connection.maximum_request_length
+    assert_equal 32, connection.bits_per_pixel
+    assert_equal 32, connection.scanline_pad
+  end
+
+  test "parse_server_info honors the DISPLAY screen number" do
+    data = build_setup_data
+    second_screen = data.byteslice(40, 72).dup
+    second_screen[0, 4] = [11].pack("V")
+    second_screen[32, 4] = [21].pack("V")
+    second_screen[48, 4] = [21].pack("V")
+    data.setbyte(20, 2)
+    data << second_screen
+    connection = build_connection
+    connection.instance_variable_set(:@default_screen, 1)
+
+    connection.send(:parse_server_info, data)
+
+    assert_equal 11, connection.root
+    assert_equal 21, connection.root_visual
+  end
+
+  test "parse_server_info rejects unavailable DISPLAY screens" do
+    connection = build_connection
+    connection.instance_variable_set(:@default_screen, 1)
+
+    error = assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.send(:parse_server_info, build_setup_data)
+    end
+
+    assert_includes error.message, "screen 1"
   end
 
   test "send_request and send_request_with_data write padded packets" do
@@ -378,6 +470,14 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 2, socket.writes.size
     assert_equal 8, socket.writes[0].bytesize
     assert_equal 12, socket.writes[1].bytesize
+  end
+
+  test "request encoder rejects overflowing core protocol lengths" do
+    encoder = RBGL::GUI::X11::RequestEncoder.new
+
+    assert_raise(ArgumentError) do
+      encoder.request_packet_with_data(72, 2, "", "x" * (65_535 * 4))
+    end
   end
 
   test "read_reply appends additional payload bytes" do
@@ -509,6 +609,38 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 77, cache.fetch(:optional)
   end
 
+  test "pixel encoder uses visual masks and scanline padding" do
+    framebuffer = RBGL::Engine::Framebuffer.new(1, 1)
+    framebuffer.set_pixel(0, 0, Larb::Color.red)
+    encoder = RBGL::GUI::X11::PixelEncoder.new(
+      bits_per_pixel: 24,
+      scanline_pad: 32,
+      visual_class: 4,
+      red_mask: 0xFF0000,
+      green_mask: 0x00FF00,
+      blue_mask: 0x0000FF
+    )
+
+    bytes = encoder.encode(framebuffer)
+
+    assert_equal [0, 0, 255, 0], bytes.bytes
+    assert_equal 4, encoder.bytes_per_line
+    assert_equal 3, encoder.bytes_per_pixel
+  end
+
+  test "pixel encoder rejects indexed color visuals" do
+    assert_raise(RBGL::GUI::BackendUnavailable) do
+      RBGL::GUI::X11::PixelEncoder.new(
+        bits_per_pixel: 8,
+        scanline_pad: 8,
+        visual_class: 3,
+        red_mask: 0,
+        green_mask: 0,
+        blue_mask: 0
+      )
+    end
+  end
+
   private
 
   def build_connection(socket: FakeSocket.new)
@@ -517,7 +649,33 @@ class X11ConnectionTest < Test::Unit::TestCase
     connection.instance_variable_set(:@pending_events, [])
     connection.instance_variable_set(:@pending_replies, {})
     connection.instance_variable_set(:@sequence, 0)
+    connection.instance_variable_set(:@default_screen, 0)
+    connection.instance_variable_set(:@maximum_request_length, 65_535)
     connection
+  end
+
+  def build_setup_data
+    data = "\x00" * 112
+    data[4, 4] = [0x1000].pack("V")
+    data[8, 4] = [0x0FFF].pack("V")
+    data[18, 2] = [65_535].pack("v")
+    data.setbyte(20, 1)
+    data.setbyte(21, 1)
+    data[32, 8] = [24, 32, 32, 0, 0].pack("CCCCV")
+    data[40, 4] = [10].pack("V")
+    data[48, 4] = [0xFFFFFF].pack("V")
+    data[52, 4] = [0x000000].pack("V")
+    data[72, 4] = [20].pack("V")
+    data.setbyte(78, 24)
+    data.setbyte(79, 1)
+    data.setbyte(80, 24)
+    data[82, 2] = [1].pack("v")
+    data[88, 4] = [20].pack("V")
+    data.setbyte(92, 4)
+    data[96, 4] = [0x00FF0000].pack("V")
+    data[100, 4] = [0x0000FF00].pack("V")
+    data[104, 4] = [0x000000FF].pack("V")
+    data
   end
 
   def xauthority_field(value)
@@ -540,6 +698,12 @@ class X11BackendTest < Test::Unit::TestCase
     put_image_args = nil
     display = Object.new
     display.define_singleton_method(:root_depth) { 24 }
+    display.define_singleton_method(:bits_per_pixel) { 32 }
+    display.define_singleton_method(:scanline_pad) { 32 }
+    display.define_singleton_method(:visual_class) { 4 }
+    display.define_singleton_method(:red_mask) { 0x00FF0000 }
+    display.define_singleton_method(:green_mask) { 0x0000FF00 }
+    display.define_singleton_method(:blue_mask) { 0x000000FF }
     display.define_singleton_method(:put_image) { |**kwargs| put_image_args = kwargs }
     display.define_singleton_method(:flush) { flushed += 1 }
 
@@ -559,6 +723,7 @@ class X11BackendTest < Test::Unit::TestCase
     attr_reader :create_window_calls, :change_property_calls, :wm_delete_window_calls, :map_calls, :create_gc_calls
     attr_reader :put_image_calls, :destroy_window_calls
     attr_reader :root_depth, :root, :root_visual, :black_pixel
+    attr_reader :bits_per_pixel, :scanline_pad, :visual_class, :red_mask, :green_mask, :blue_mask
 
     def initialize
       @ids = [101, 202]
@@ -573,6 +738,12 @@ class X11BackendTest < Test::Unit::TestCase
       @root = 1
       @root_visual = 2
       @black_pixel = 0
+      @bits_per_pixel = 32
+      @scanline_pad = 32
+      @visual_class = 4
+      @red_mask = 0x00FF0000
+      @green_mask = 0x0000FF00
+      @blue_mask = 0x000000FF
     end
 
     def generate_id
