@@ -56,11 +56,11 @@ module RBGL
       end
 
       def metal_available?
-        @backend.metal_available?
+        @backend.respond_to?(:metal_available?) && @backend.metal_available?
       end
 
       def native_handle
-        @backend.native_handle
+        @backend.native_handle if @backend.respond_to?(:native_handle)
       end
 
       def should_close?

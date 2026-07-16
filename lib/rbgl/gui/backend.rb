@@ -26,7 +26,7 @@ module RBGL
       end
 
       def poll_events_raw
-        []
+        poll_events.filter_map { |event| event.to_h if event.respond_to?(:to_h) }
       end
 
       def resize(width, height)
@@ -43,15 +43,7 @@ module RBGL
       end
 
       def set_pixels(buffer, width, height)
-        raise NotImplementedError
-      end
-
-      def metal_available?
-        false
-      end
-
-      def native_handle
-        nil
+        present(Engine::Framebuffer.from_rgba_bytes(width, height, buffer))
       end
     end
   end

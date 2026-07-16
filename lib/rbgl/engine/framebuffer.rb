@@ -5,6 +5,10 @@ module RBGL
     class Framebuffer
       attr_reader :width, :height, :color_buffer, :depth_buffer
 
+      def self.from_rgba_bytes(width, height, buffer)
+        new(width, height).tap { |framebuffer| framebuffer.send(:load_rgba_bytes, buffer) }
+      end
+
       def initialize(width, height)
         @width = width
         @height = height
@@ -96,6 +100,30 @@ module RBGL
       end
 
       private
+
+      def load_rgba_bytes(buffer)
+        bytes = String.try_convert(buffer)
+        raise ArgumentError, "Pixel buffer must be a String" unless bytes
+
+        expected_size = @width * @height * 4
+        unless bytes.bytesize == expected_size
+          raise ArgumentError, "Pixel buffer size mismatch: expected #{expected_size}, got #{bytes.bytesize}"
+        end
+
+        @color_buffer = Array.new(@width * @height)
+        pixel_index = 0
+        byte_index = 0
+        while pixel_index < @color_buffer.length
+          @color_buffer[pixel_index] = ImmutableColor.new(
+            bytes.getbyte(byte_index) / 255.0,
+            bytes.getbyte(byte_index + 1) / 255.0,
+            bytes.getbyte(byte_index + 2) / 255.0,
+            bytes.getbyte(byte_index + 3) / 255.0
+          ).freeze
+          pixel_index += 1
+          byte_index += 4
+        end
+      end
 
       def blend_color(destination, source, blend_mode)
         case blend_mode

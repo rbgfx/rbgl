@@ -3,6 +3,19 @@
 require_relative "../../test_helper"
 
 class FramebufferTest < Test::Unit::TestCase
+  test "builds a framebuffer from RGBA bytes" do
+    framebuffer = RBGL::Engine::Framebuffer.from_rgba_bytes(2, 1, "\xFF\x00\x80\xFF\x00\xFF\x00\x40")
+
+    assert_equal [255, 0, 128, 255, 0, 255, 0, 64], framebuffer.to_rgba_bytes.bytes
+    assert_raise(FrozenError) { framebuffer.get_pixel(0, 0).r = 0.0 }
+  end
+
+  test "rejects malformed RGBA buffers" do
+    error = assert_raise(ArgumentError) { RBGL::Engine::Framebuffer.from_rgba_bytes(2, 1, "short") }
+
+    assert_includes error.message, "expected 8"
+  end
+
   setup do
     @fb = RBGL::Engine::Framebuffer.new(10, 10)
   end

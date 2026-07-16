@@ -45,9 +45,14 @@ class BackendTest < Test::Unit::TestCase
     end
   end
 
-  test "poll_events_raw returns empty array by default" do
-    backend = RBGL::GUI::Backend.new(640, 480)
-    assert_equal [], backend.poll_events_raw
+  test "poll_events_raw converts portable events to hashes" do
+    backend = Class.new(RBGL::GUI::Backend) do
+      def poll_events
+        [RBGL::GUI::Event.new(:key_press, key: :escape), Object.new]
+      end
+    end.new(640, 480)
+
+    assert_equal [{ type: :key_press, key: :escape }], backend.poll_events_raw
   end
 
   test "resize updates backend dimensions" do
@@ -73,21 +78,25 @@ class BackendTest < Test::Unit::TestCase
     end
   end
 
-  test "set_pixels raises NotImplementedError" do
-    backend = RBGL::GUI::Backend.new(640, 480)
-    assert_raise(NotImplementedError) do
-      backend.set_pixels("pixels", 640, 480)
-    end
+  test "set_pixels presents RGBA data through the portable framebuffer API" do
+    backend = Class.new(RBGL::GUI::Backend) do
+      attr_reader :framebuffer
+
+      def present(framebuffer)
+        @framebuffer = framebuffer
+        true
+      end
+    end.new(1, 1)
+
+    assert_true backend.set_pixels("\xFF\x00\x00\xFF", 1, 1)
+    assert_equal [255, 0, 0, 255], backend.framebuffer.to_rgba_bytes.bytes
   end
 
-  test "metal_available? returns false by default" do
+  test "native extensions are absent from the portable backend" do
     backend = RBGL::GUI::Backend.new(640, 480)
-    assert_false backend.metal_available?
-  end
 
-  test "native_handle returns nil by default" do
-    backend = RBGL::GUI::Backend.new(640, 480)
-    assert_nil backend.native_handle
+    assert_false backend.respond_to?(:metal_available?)
+    assert_false backend.respond_to?(:native_handle)
   end
   test "backend unavailable is a standard error" do
     assert_kind_of StandardError, RBGL::GUI::BackendUnavailable.new("unavailable")
