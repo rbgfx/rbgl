@@ -19,7 +19,7 @@ module RBGL
       def initialize(width, height, data = nil)
         @width = width
         @height = height
-        @data = data ? normalize_data!(data) : Array.new(width * height) { Larb::Color.black }
+        @data = data ? normalize_data!(data) : Array.new(width * height, immutable_color(Larb::Color.black))
         @levels = [@data]
         @mipmaps_dirty = true
         @wrap_s = WRAP_REPEAT
@@ -48,7 +48,7 @@ module RBGL
       def set_pixel(x, y, color)
         return if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @data[y.to_i * @width + x.to_i] = duplicate_color(color)
+        @data[y.to_i * @width + x.to_i] = immutable_color(color)
         @mipmaps_dirty = true
       end
 
@@ -93,7 +93,8 @@ module RBGL
       end
 
       def self.solid(width, height, color)
-        new(width, height, Array.new(width * height) { color })
+        immutable = ImmutableColor.from(color)
+        new(width, height, Array.new(width * height, immutable))
       end
 
       def self.parse_ppm_header(content)
@@ -162,7 +163,7 @@ module RBGL
           raise ArgumentError, "Texture data size mismatch: expected #{expected_size}, got #{normalized.size}"
         end
 
-        normalized.map { |pixel| duplicate_color(pixel) }
+        normalized.map { |pixel| immutable_color(pixel) }
       end
 
       def validate_color!(color)
@@ -171,9 +172,8 @@ module RBGL
         raise ArgumentError, "Texture data must contain only Larb::Color values"
       end
 
-      def duplicate_color(color)
-        validated = validate_color!(color)
-        Larb::Color.new(validated.r, validated.g, validated.b, validated.a)
+      def immutable_color(color)
+        ImmutableColor.from(validate_color!(color))
       end
 
       def wrap_coord(coord, mode)
@@ -307,12 +307,12 @@ module RBGL
         end
 
         sample_count = samples.length.to_f
-        Larb::Color.new(
+        immutable_color(Larb::Color.new(
           samples.sum(&:r) / sample_count,
           samples.sum(&:g) / sample_count,
           samples.sum(&:b) / sample_count,
           samples.sum(&:a) / sample_count
-        )
+        ))
       end
     end
   end

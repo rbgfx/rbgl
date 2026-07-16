@@ -193,13 +193,14 @@ class TextureTest < Test::Unit::TestCase
     assert_equal red.to_a, tex.get_pixel(2, 2).to_a
   end
 
-  test "solid stores independent color objects for every texel" do
+  test "solid safely shares immutable color objects" do
     red = Larb::Color.red
     tex = RBGL::Engine::Texture.solid(2, 1, red)
 
-    tex.get_pixel(0, 0).r = 0.25
+    assert_raise(FrozenError) { tex.get_pixel(0, 0).r = 0.25 }
     red.g = 0.5
 
+    assert_same tex.get_pixel(0, 0), tex.get_pixel(1, 0)
     assert_in_delta 1.0, tex.get_pixel(1, 0).r, 0.001
     assert_in_delta 0.0, tex.get_pixel(1, 0).g, 0.001
   end

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "version"
+require_relative "engine/immutable_color"
 require_relative "engine/framebuffer"
 require_relative "engine/buffer"
 require_relative "engine/shader"

@@ -8,14 +8,14 @@ module RBGL
       def initialize(width, height)
         @width = width
         @height = height
-        @color_buffer = Array.new(width * height) { Larb::Color.black }
+        @color_buffer = color_buffer_filled_with(Larb::Color.black)
         @depth_buffer = Array.new(width * height) { Float::INFINITY }
       end
 
       def resize(width, height)
         @width = width
         @height = height
-        @color_buffer = Array.new(width * height) { Larb::Color.black }
+        @color_buffer = color_buffer_filled_with(Larb::Color.black)
         @depth_buffer = Array.new(width * height) { Float::INFINITY }
       end
 
@@ -28,7 +28,7 @@ module RBGL
       def set_pixel(x, y, color)
         return if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @color_buffer[y * @width + x] = duplicate_color(color)
+        @color_buffer[y * @width + x] = immutable_color(color)
       end
 
       def get_depth(x, y)
@@ -49,18 +49,18 @@ module RBGL
         idx = y * @width + x
         return false if depth_test && depth >= @depth_buffer[idx]
 
-        @color_buffer[idx] = blend_color(@color_buffer[idx], color, blend_mode)
+        @color_buffer[idx] = immutable_color(blend_color(@color_buffer[idx], color, blend_mode))
         @depth_buffer[idx] = depth if depth_write
         true
       end
 
       def clear(color: Larb::Color.black, depth: Float::INFINITY)
-        @color_buffer = Array.new(@width * @height) { duplicate_color(color) }
+        @color_buffer.fill(immutable_color(color))
         @depth_buffer.fill(depth)
       end
 
       def clear_color(color)
-        @color_buffer = Array.new(@width * @height) { duplicate_color(color) }
+        @color_buffer.fill(immutable_color(color))
       end
 
       def clear_depth(depth = Float::INFINITY)
@@ -68,30 +68,31 @@ module RBGL
       end
 
       def to_ppm
-        ppm = "P3\n#{@width} #{@height}\n255\n"
+        ppm = String.new(capacity: @width * @height * 12, encoding: Encoding::BINARY)
+        ppm << "P3\n#{@width} #{@height}\n255\n"
         @height.times do |y|
-          row = @width.times.map do |x|
+          @width.times do |x|
             c = @color_buffer[y * @width + x]
-            bytes = c.to_bytes
-            "#{bytes[0]} #{bytes[1]} #{bytes[2]}"
+            ppm << " " unless x.zero?
+            ppm << color_byte(c.r).to_s << " " << color_byte(c.g).to_s << " " << color_byte(c.b).to_s
           end
-          ppm += row.join(" ") + "\n"
+          ppm << "\n"
         end
         ppm
       end
 
       def to_ppm_binary
         header = "P6\n#{@width} #{@height}\n255\n"
-        pixels = packed_color_bytes(%i[r g b])
+        pixels = packed_color_bytes(:rgb)
         header + pixels
       end
 
       def to_rgba_bytes
-        packed_color_bytes(%i[r g b a])
+        packed_color_bytes(:rgba)
       end
 
       def to_bgra_bytes
-        packed_color_bytes(%i[b g r a])
+        packed_color_bytes(:bgra)
       end
 
       private
@@ -108,22 +109,37 @@ module RBGL
             alpha + destination.a * inv_alpha
           )
         else
-          duplicate_color(source)
+          source
         end
       end
 
-      def duplicate_color(color)
-        return Larb::Color.new(color.r, color.g, color.b, color.a) if color.is_a?(Larb::Color)
-
-        raise ArgumentError, "Framebuffer colors must be Larb::Color values"
+      def immutable_color(color)
+        ImmutableColor.from(color)
       end
 
-      def packed_color_bytes(channels)
-        @color_buffer.flat_map do |color|
-          channels.map do |channel|
-            (color.public_send(channel) * 255).round.clamp(0, 255)
+      def color_buffer_filled_with(color)
+        Array.new(@width * @height, immutable_color(color))
+      end
+
+      def packed_color_bytes(format)
+        channel_count = format == :rgb ? 3 : 4
+        bytes = String.new(capacity: @color_buffer.length * channel_count, encoding: Encoding::BINARY)
+
+        @color_buffer.each do |color|
+          case format
+          when :rgb
+            bytes << color_byte(color.r) << color_byte(color.g) << color_byte(color.b)
+          when :rgba
+            bytes << color_byte(color.r) << color_byte(color.g) << color_byte(color.b) << color_byte(color.a)
+          when :bgra
+            bytes << color_byte(color.b) << color_byte(color.g) << color_byte(color.r) << color_byte(color.a)
           end
-        end.pack("C*")
+        end
+        bytes
+      end
+
+      def color_byte(value)
+        (value * 255).round.clamp(0, 255)
       end
     end
   end

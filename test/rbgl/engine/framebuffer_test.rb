@@ -156,13 +156,12 @@ class FramebufferTest < Test::Unit::TestCase
     assert_equal 1.0, @fb.get_depth(0, 0)
   end
 
-  test "clear stores independent color objects for every pixel" do
+  test "clear safely shares immutable color objects" do
     red = Larb::Color.red
     @fb.clear(color: red)
 
-    @fb.get_pixel(0, 0).r = 0.25
-
-    assert_in_delta 1.0, @fb.get_pixel(1, 0).r, 0.001
+    assert_raise(FrozenError) { @fb.get_pixel(0, 0).r = 0.25 }
+    assert_same @fb.get_pixel(0, 0), @fb.get_pixel(1, 0)
     assert_not_same red, @fb.get_pixel(0, 0)
   end
 
@@ -175,6 +174,8 @@ class FramebufferTest < Test::Unit::TestCase
 
     assert_in_delta 1.0, @fb.get_pixel(0, 0).r, 0.001
     assert_in_delta 1.0, @fb.get_pixel(1, 0).r, 0.001
+    assert_true @fb.get_pixel(0, 0).frozen?
+    assert_true @fb.get_pixel(1, 0).frozen?
   end
 
   test "clear_color only clears color buffer" do
