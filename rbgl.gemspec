@@ -27,8 +27,8 @@ Gem::Specification.new do |spec|
   end
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "larb", ">= 1.0.0", "< 2.0"
-  spec.add_dependency "rlsl", ">= 0.1.0", "< 2.0"
+  spec.add_dependency "larb", "~> 1.0"
+  spec.add_development_dependency "rlsl", "~> 0.1"
 
   spec.bindir = "exe"
   spec.executables = ["rbgl"]
