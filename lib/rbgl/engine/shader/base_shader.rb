@@ -9,8 +9,9 @@ module RBGL
         @process_block = block
       end
 
-      def process(input, uniforms)
-        output = ShaderIO.new
+      def process(input, uniforms, output: nil)
+        output ||= ShaderIO.new
+        output.clear
 
         instance_exec(input, uniforms, output, &@process_block)
         finalize_output(output)

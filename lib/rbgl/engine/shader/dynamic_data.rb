@@ -38,6 +38,11 @@ module RBGL
         @data.keys
       end
 
+      def clear
+        @data.clear
+        self
+      end
+
       private
 
       def normalize_key(key)

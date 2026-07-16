@@ -44,6 +44,13 @@ class ShaderIOTest < Test::Unit::TestCase
 
     assert_raise(NoMethodError) { io.missing }
   end
+
+  test "clear removes all stored values and returns self" do
+    io = RBGL::Engine::ShaderIO.new(color: Larb::Color.red)
+
+    assert_same io, io.clear
+    assert_empty io.keys
+  end
 end
 
 class UniformsTest < Test::Unit::TestCase
@@ -557,6 +564,20 @@ class FragmentShaderTest < Test::Unit::TestCase
     end
 
     result = shader.process(RBGL::Engine::ShaderIO.new, RBGL::Engine::Uniforms.new)
+    assert_equal 1.0, result[:color].r
+  end
+
+  test "process can reuse a cleared output object" do
+    shader = RBGL::Engine::FragmentShader.new do |input, _uniforms, output|
+      output.color = input[:color] if input[:color]
+    end
+    output = RBGL::Engine::ShaderIO.new(stale: true)
+    input = RBGL::Engine::ShaderIO.new(color: Larb::Color.red)
+
+    result = shader.process(input, RBGL::Engine::Uniforms.new, output: output)
+
+    assert_same output, result
+    assert_nil result[:stale]
     assert_equal 1.0, result[:color].r
   end
 

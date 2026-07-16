@@ -9,9 +9,9 @@ require "rbgl"
 include Larb
 include RBGL::Engine
 
-WIDTH = 320
-HEIGHT = 240
-ITERATIONS = 1_000
+WIDTH = Integer(ENV.fetch("RBGL_BENCH_WIDTH", "320"))
+HEIGHT = Integer(ENV.fetch("RBGL_BENCH_HEIGHT", "240"))
+ITERATIONS = Integer(ENV.fetch("RBGL_BENCH_ITERATIONS", "10"))
 
 def build_context
   Context.new(width: WIDTH, height: HEIGHT)

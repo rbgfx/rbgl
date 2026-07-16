@@ -22,22 +22,56 @@ module RBGL
 
           min_x, max_x, min_y, max_y = bounds(p0, p1, p2)
           inv_area = 1.0 / area
+          inverse_w0 = @interpolator.inverse_clip_w(v0[:position])
+          inverse_w1 = @interpolator.inverse_clip_w(v1[:position])
+          inverse_w2 = @interpolator.inverse_clip_w(v2[:position])
+          interpolation_plan = @interpolator.prepare([v0, v1, v2])
+          attributes = ShaderIO.new
+          fragment_output = ShaderIO.new
 
-          (min_y..max_y).each do |y|
-            (min_x..max_x).each do |x|
-              weights = barycentric_weights(p0, p1, p2, x + 0.5, y + 0.5)
-              next unless inside_triangle?(weights)
+          x = min_x + 0.5
+          y = min_y + 0.5
+          row_w0 = edge_value(p1, p2, x, y)
+          row_w1 = edge_value(p2, p0, x, y)
+          row_w2 = edge_value(p0, p1, x, y)
+          x_steps = [p2.y - p1.y, p0.y - p2.y, p1.y - p0.y]
+          y_steps = [p1.x - p2.x, p2.x - p0.x, p0.x - p1.x]
+          positive_area = area.positive?
 
-              screen_weights = weights.map { |weight| weight * inv_area }
-              corrected_weights = @interpolator.perspective_correct_weights(
-                [v0[:position], v1[:position], v2[:position]],
-                screen_weights
-              )
-              depth = @interpolator.interpolate_depth([p0.z, p1.z, p2.z], corrected_weights)
-              attributes = @interpolator.interpolate([v0, v1, v2], corrected_weights)
+          (min_y..max_y).each do |pixel_y|
+            w0 = row_w0
+            w1 = row_w1
+            w2 = row_w2
+            (min_x..max_x).each do |pixel_x|
+              if inside_triangle?(w0, w1, w2, positive_area)
+                screen_w0 = w0 * inv_area
+                screen_w1 = w1 * inv_area
+                screen_w2 = w2 * inv_area
+                corrected_w0 = screen_w0 * inverse_w0
+                corrected_w1 = screen_w1 * inverse_w1
+                corrected_w2 = screen_w2 * inverse_w2
+                total = corrected_w0 + corrected_w1 + corrected_w2
+                unless total.zero?
+                  corrected_w0 /= total
+                  corrected_w1 /= total
+                  corrected_w2 /= total
+                end
+                depth = p0.z * corrected_w0 + p1.z * corrected_w1 + p2.z * corrected_w2
+                @interpolator.interpolate_triangle(
+                  interpolation_plan, corrected_w0, corrected_w1, corrected_w2, result: attributes
+                )
 
-              shade_fragment(x, y, depth, attributes, fragment_shader, uniforms, state)
+                shade_fragment(
+                  pixel_x, pixel_y, depth, attributes, fragment_shader, uniforms, state, fragment_output
+                )
+              end
+              w0 += x_steps[0]
+              w1 += x_steps[1]
+              w2 += x_steps[2]
             end
+            row_w0 += y_steps[0]
+            row_w1 += y_steps[1]
+            row_w2 += y_steps[2]
           end
         end
 
@@ -51,17 +85,12 @@ module RBGL
           [min_x, max_x, min_y, max_y]
         end
 
-        def barycentric_weights(p0, p1, p2, x, y)
-          point = Larb::Vec2.new(x, y)
-          [
-            @edge_function.call(p1, p2, point),
-            @edge_function.call(p2, p0, point),
-            @edge_function.call(p0, p1, point)
-          ]
+        def edge_value(a, b, x, y)
+          (x - a.x) * (b.y - a.y) - (y - a.y) * (b.x - a.x)
         end
 
-        def inside_triangle?(weights)
-          weights.all? { |weight| weight >= 0 } || weights.all? { |weight| weight <= 0 }
+        def inside_triangle?(w0, w1, w2, positive_area)
+          positive_area ? w0 >= 0 && w1 >= 0 && w2 >= 0 : w0 <= 0 && w1 <= 0 && w2 <= 0
         end
 
         def culled?(area, cull_mode)
@@ -72,8 +101,8 @@ module RBGL
           end
         end
 
-        def shade_fragment(x, y, depth, attributes, fragment_shader, uniforms, state)
-          frag_output = fragment_shader.process(attributes, uniforms)
+        def shade_fragment(x, y, depth, attributes, fragment_shader, uniforms, state, fragment_output)
+          frag_output = fragment_shader.process(attributes, uniforms, output: fragment_output)
           @framebuffer.write_pixel(
             x, y, frag_output[:color], depth,
             depth_test: state[:depth_test],

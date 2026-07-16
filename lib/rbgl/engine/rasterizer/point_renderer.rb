@@ -16,10 +16,10 @@ module RBGL
           y = point.y.round
           depth = point.z
           x_offsets, y_offsets = @point_pixel_offsets.call(state[:size])
+          frag_output = fragment_shader.process(vertex, uniforms)
 
           y_offsets.each do |dy|
             x_offsets.each do |dx|
-              frag_output = fragment_shader.process(vertex, uniforms)
               @framebuffer.write_pixel(
                 x + dx, y + dy, frag_output[:color], depth,
                 depth_test: state[:depth_test],
