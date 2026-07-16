@@ -67,7 +67,7 @@ view = Mat4.look_at(
 
 window.on(:key_press) do |event|
   puts "Key pressed: #{event.key}"
-  window.stop if event.key == 12 || event.key == "q" || event.key == "Escape"
+  window.stop if %i[escape q].include?(event.key)
 end
 
 puts "Press 'q' or Escape to quit"

@@ -52,7 +52,7 @@ while running && !window.should_close?
 
   events = window.poll_events_raw
   events.each do |e|
-    if e[:type] == :key_press && (e[:key] == 12 || e[:key] == "q")
+    if e[:type] == :key_press && %i[escape q].include?(e[:key])
       running = false
     end
   end

@@ -42,7 +42,7 @@ time = 0.0
 
 window.on(:key_press) do |event|
   puts "Key: #{event.key}"
-  window.stop if event.key == 12 || event.key == "q" || event.key == "Escape"
+  window.stop if %i[escape q].include?(event.key)
 end
 
 window.on(:mouse_move) do |event|

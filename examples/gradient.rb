@@ -67,7 +67,7 @@ while running && !window.should_close?
   events.each do |e|
     case e[:type]
     when :key_press
-      running = false if e[:key] == 12 || e[:key] == "q"
+      running = false if %i[escape q].include?(e[:key])
     end
   end
 
