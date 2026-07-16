@@ -539,16 +539,13 @@ class WaylandBackendTest < Test::Unit::TestCase
   test "poll_events converts wayland close and resize events" do
     backend = RBGL::GUI::Wayland::Backend.allocate
     toplevel = FakeObject.new(33)
-    backend.instance_variable_set(:@handle, 10)
     backend.instance_variable_set(
-      :@windows,
+      :@window,
       {
-        10 => {
-          toplevel: toplevel,
-          width: 100,
-          height: 80,
-          should_close: false
-        }
+        toplevel: toplevel,
+        width: 100,
+        height: 80,
+        should_close: false
       }
     )
     backend.instance_variable_set(
@@ -569,15 +566,12 @@ class WaylandBackendTest < Test::Unit::TestCase
     backend = RBGL::GUI::Wayland::Backend.allocate
     surface = FakeObject.new(10)
     toplevel = FakeObject.new(33)
-    backend.instance_variable_set(:@handle, 10)
     backend.instance_variable_set(
-      :@windows,
+      :@window,
       {
-        10 => {
-          surface: surface,
-          toplevel: toplevel,
-          should_close: false
-        }
+        surface: surface,
+        toplevel: toplevel,
+        should_close: false
       }
     )
     backend.instance_variable_set(
@@ -597,20 +591,17 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_equal 1, events[2].button
   end
 
-  test "close destroys wayland window resources and clears handle" do
+  test "close destroys and clears wayland window resources" do
     backend = RBGL::GUI::Wayland::Backend.allocate
     destroyed = []
-    backend.instance_variable_set(:@handle, 10)
     backend.instance_variable_set(
-      :@windows,
+      :@window,
       {
-        10 => {
-          toplevel: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { destroyed << :toplevel } },
-          xdg_surface: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { destroyed << :xdg_surface } },
-          surface: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { destroyed << :surface } },
-          shm_buffer: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { |force: false| destroyed << [:shm_buffer, force] } },
-          should_close: false
-        }
+        toplevel: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { destroyed << :toplevel } },
+        xdg_surface: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { destroyed << :xdg_surface } },
+        surface: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { destroyed << :surface } },
+        shm_buffer: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { |force: false| destroyed << [:shm_buffer, force] } },
+        should_close: false
       }
     )
     connection = Object.new
@@ -628,7 +619,7 @@ class WaylandBackendTest < Test::Unit::TestCase
       :flush,
       :connection
     ], destroyed
-    assert_nil backend.instance_variable_get(:@handle)
+    assert_nil backend.instance_variable_get(:@window)
   end
 
   test "setup commits an empty surface and waits for configure before allocating buffers" do
@@ -660,7 +651,7 @@ class WaylandBackendTest < Test::Unit::TestCase
 
     backend = RBGL::GUI::Wayland::Backend.allocate
     backend.instance_variable_set(:@connection, connection)
-    backend.instance_variable_set(:@windows, {})
+    backend.instance_variable_set(:@window, nil)
     backend.define_singleton_method(:create_shm_buffers) do |_width, _height|
       calls << :create_buffers
       [buffer]
@@ -669,7 +660,7 @@ class WaylandBackendTest < Test::Unit::TestCase
     backend.send(:setup_window, 100, 80, "Test")
 
     assert_equal [:title, :empty_commit, :flush, :wait_for_configure, :create_buffers], calls
-    assert_equal buffer, backend.instance_variable_get(:@windows)[10][:shm_buffer]
+    assert_equal buffer, backend.instance_variable_get(:@window)[:shm_buffer]
   end
 
   test "resize recreates shm buffer for the current window" do
@@ -680,16 +671,13 @@ class WaylandBackendTest < Test::Unit::TestCase
     old_buffer.define_singleton_method(:destroy) { old_buffer_destroyed = true }
     old_buffer.define_singleton_method(:available?) { true }
 
-    backend.instance_variable_set(:@handle, 10)
     backend.instance_variable_set(
-      :@windows,
+      :@window,
       {
-        10 => {
-          buffers: [old_buffer],
-          shm_buffer: old_buffer,
-          width: 100,
-          height: 80
-        }
+        buffers: [old_buffer],
+        shm_buffer: old_buffer,
+        width: 100,
+        height: 80
       }
     )
 
@@ -703,8 +691,8 @@ class WaylandBackendTest < Test::Unit::TestCase
 
     assert_equal [[320, 200]], created
     assert_true old_buffer_destroyed
-    assert_equal [new_buffer, new_buffer], backend.instance_variable_get(:@windows)[10][:buffers]
-    assert_equal new_buffer, backend.instance_variable_get(:@windows)[10][:shm_buffer]
+    assert_equal [new_buffer, new_buffer], backend.instance_variable_get(:@window)[:buffers]
+    assert_equal new_buffer, backend.instance_variable_get(:@window)[:shm_buffer]
     assert_equal 320, backend.width
     assert_equal 200, backend.height
   end
@@ -732,15 +720,12 @@ class WaylandBackendTest < Test::Unit::TestCase
     connection.define_singleton_method(:flush) { }
 
     backend.instance_variable_set(:@connection, connection)
-    backend.instance_variable_set(:@handle, 10)
     backend.instance_variable_set(
-      :@windows,
+      :@window,
       {
-        10 => {
-          surface: surface,
-          buffers: [busy_buffer, free_buffer],
-          shm_buffer: busy_buffer
-        }
+        surface: surface,
+        buffers: [busy_buffer, free_buffer],
+        shm_buffer: busy_buffer
       }
     )
 
@@ -749,7 +734,7 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_equal 1, written.size
     assert_equal [free_buffer], attached
     assert_equal 1, committed
-    assert_equal free_buffer, backend.instance_variable_get(:@windows)[10][:shm_buffer]
+    assert_equal free_buffer, backend.instance_variable_get(:@window)[:shm_buffer]
   end
 
   test "present waits for a released shm buffer instead of dropping the frame" do
@@ -778,15 +763,12 @@ class WaylandBackendTest < Test::Unit::TestCase
     end
 
     backend.instance_variable_set(:@connection, connection)
-    backend.instance_variable_set(:@handle, 10)
     backend.instance_variable_set(
-      :@windows,
+      :@window,
       {
-        10 => {
-          surface: surface,
-          buffers: [buffer],
-          shm_buffer: buffer
-        }
+        surface: surface,
+        buffers: [buffer],
+        shm_buffer: buffer
       }
     )
 
@@ -824,16 +806,13 @@ class WaylandBackendTest < Test::Unit::TestCase
     end
 
     backend.instance_variable_set(:@connection, connection)
-    backend.instance_variable_set(:@handle, 10)
     backend.instance_variable_set(
-      :@windows,
+      :@window,
       {
-        10 => {
-          surface: surface,
-          buffers: [buffer],
-          shm_buffer: buffer,
-          should_close: false
-        }
+        surface: surface,
+        buffers: [buffer],
+        shm_buffer: buffer,
+        should_close: false
       }
     )
     backend.define_singleton_method(:monotonic_time) { times.shift || times.last || 0.3 }

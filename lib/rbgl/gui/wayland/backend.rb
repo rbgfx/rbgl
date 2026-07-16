@@ -13,7 +13,7 @@ module RBGL
         def initialize(width, height, title = "RBGL", env: ENV, roundtrip_timeout: Connection::DEFAULT_ROUNDTRIP_TIMEOUT)
           super(width, height, title)
           @connection = Connection.new(env: env, roundtrip_timeout: roundtrip_timeout)
-          @windows = {}
+          @window = nil
           setup_window(width, height, title)
         rescue StandardError
           @connection&.close
@@ -26,8 +26,7 @@ module RBGL
           toplevel = xdg_surface.get_toplevel
           toplevel.set_title(t)
 
-          handle = surface.id
-          @windows[handle] = {
+          @window = {
             surface: surface,
             xdg_surface: xdg_surface,
             toplevel: toplevel,
@@ -38,20 +37,17 @@ module RBGL
             should_close: false
           }
 
-          @handle = handle
           surface.commit
           @connection.flush
           wait_for_initial_configure(xdg_surface)
 
           buffers = create_shm_buffers(w, h)
-          @windows[handle][:buffers] = buffers
-          @windows[handle][:shm_buffer] = buffers.first
+          @window[:buffers] = buffers
+          @window[:shm_buffer] = buffers.first
         end
 
         def present(framebuffer)
-          return false unless @handle
-
-          window = @windows[@handle]
+          window = @window
           return false unless window
 
           buffer_object = wait_for_available_buffer(window)
@@ -75,9 +71,7 @@ module RBGL
 
         def resize(width, height)
           super
-          return unless @handle
-
-          window = @windows[@handle]
+          window = @window
           return unless window
           return if window[:width] == width && window[:height] == height
 
@@ -91,15 +85,11 @@ module RBGL
         end
 
         def should_close?
-          return false unless @handle
-
-          @windows[@handle]&.[](:should_close) || false
+          @window.nil? || @window[:should_close]
         end
 
         def close
-          return unless @handle
-
-          window = @windows[@handle]
+          window = @window
           return unless window
 
           window[:should_close] = true
@@ -108,8 +98,7 @@ module RBGL
           window[:surface].destroy
           window.fetch(:buffers, [window[:shm_buffer]].compact).each { |buffer| buffer.destroy(force: true) }
           @connection.flush
-          @windows.delete(@handle)
-          @handle = nil
+          @window = nil
           @connection.close
         end
 
@@ -147,9 +136,8 @@ module RBGL
         end
 
         def window_for_event(object_id)
-          @windows.values.find do |window|
-            window[:toplevel].id == object_id || window[:surface].id == object_id
-          end
+          return unless @window
+          return @window if @window[:toplevel].id == object_id || @window[:surface].id == object_id
         end
 
         def next_available_buffer(window)

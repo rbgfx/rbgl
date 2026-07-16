@@ -10,7 +10,7 @@ module RBGL
         def initialize(width, height, title = "RBGL", env: ENV)
           super(width, height, title)
           @display = Connection.new(env["DISPLAY"] || ":0", env: env)
-          @windows = {}
+          @window = nil
           setup_window(width, height, title)
         end
 
@@ -43,27 +43,24 @@ module RBGL
           gc_id = @display.generate_id
           @display.create_gc(gc_id, wid)
 
-          @windows[wid] = {
+          @window = {
+            id: wid,
             width: w,
             height: h,
             gc: gc_id,
             should_close: false
           }
-
-          @handle = wid
         end
 
         def present(framebuffer)
-          return false unless @handle
-
-          window = @windows[@handle]
+          window = @window
           return false unless window
 
           buffer = convert_to_x11_format(framebuffer)
 
           @display.put_image(
             format: :z_pixmap,
-            drawable: @handle,
+            drawable: window[:id],
             gc: window[:gc],
             width: framebuffer.width,
             height: framebuffer.height,
@@ -92,19 +89,17 @@ module RBGL
         end
 
         def should_close?
-          return false unless @handle
-
-          @windows[@handle]&.[](:should_close) || false
+          @window.nil? || @window[:should_close]
         end
 
         def close
-          return unless @handle
+          window = @window
+          return unless window
 
-          @windows[@handle][:should_close] = true
-          @display.destroy_window(@handle)
+          window[:should_close] = true
+          @display.destroy_window(window[:id])
           @display.flush
-          @windows.delete(@handle)
-          @handle = nil
+          @window = nil
           @display.close
         end
 
@@ -140,11 +135,11 @@ module RBGL
           when :configure_notify
             Event.new(:resize, width: raw[:width], height: raw[:height])
           when :client_message
-            return nil unless raw[:window] == @handle
+            return nil unless @window && raw[:window] == @window[:id]
             return nil unless raw[:message_type] == @display.wm_protocols_atom
             return nil unless raw[:data32]&.first == @display.wm_delete_window_atom
 
-            @windows[@handle][:should_close] = true if @handle && @windows[@handle]
+            @window[:should_close] = true
             Event.new(:close)
           else
             nil

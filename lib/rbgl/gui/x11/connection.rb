@@ -50,7 +50,7 @@ module RBGL
         end
 
         def flush
-          transport.flush
+          @transport.flush
         end
 
         def atom(name)
@@ -77,7 +77,7 @@ module RBGL
         end
 
         def pending
-          @pending_events.length + transport.pending
+          @pending_events.length + @transport.pending
         end
 
         def create_window(depth:, wid:, parent:, x:, y:, width:, height:,
@@ -171,14 +171,14 @@ module RBGL
         end
 
         def read_events
-          while transport.pending > 0
+          while @transport.pending > 0
             event = read_event
             @pending_events << event if event
           end
         end
 
         def close
-          transport.close
+          @transport.close
         end
 
         private
@@ -208,25 +208,25 @@ module RBGL
           auth_name = cookie ? XAuthority::AUTH_NAME : ""
           auth_data = cookie || ""
           init_request = [0x6C, 0, 11, 0, auth_name.bytesize, auth_data.bytesize, 0].pack("CCvvvvv")
-          init_request << pad_to_4(auth_name)
-          init_request << pad_to_4(auth_data)
+          init_request << request_encoder.pad_to_4(auth_name)
+          init_request << request_encoder.pad_to_4(auth_data)
 
-          transport.write(init_request)
-          transport.flush
+          @transport.write(init_request)
+          @transport.flush
 
-          header = transport.read_exact(8)
+          header = @transport.read_exact(8)
           raise GUI::BackendUnavailable, "X11 connection closed during handshake" unless header&.bytesize == 8
 
           status = header.unpack1("C")
           unless status == 1
             reason_length = header.getbyte(1)
-            reason = reason_length.positive? ? transport.read_exact(pad_length(reason_length)).byteslice(0, reason_length) : nil
+            reason = reason_length.positive? ? @transport.read_exact(pad_length(reason_length)).byteslice(0, reason_length) : nil
             detail = reason && !reason.empty? ? ": #{reason}" : ""
             raise GUI::BackendUnavailable, "X11 connection failed#{detail}"
           end
 
           additional_length = header[6, 2].unpack1("v")
-          data = transport.read_exact(additional_length * 4)
+          data = @transport.read_exact(additional_length * 4)
 
           parse_server_info(data)
         end
@@ -260,12 +260,12 @@ module RBGL
         end
 
         def send_request(opcode, data, extra = 0)
-          transport.write(request_encoder.request_packet(opcode, data, extra))
+          @transport.write(request_encoder.request_packet(opcode, data, extra))
           next_sequence
         end
 
         def send_request_with_data(opcode, extra, header_data, bulk_data)
-          transport.write(request_encoder.request_packet_with_data(opcode, extra, header_data, bulk_data))
+          @transport.write(request_encoder.request_packet_with_data(opcode, extra, header_data, bulk_data))
           next_sequence
         end
 
@@ -350,10 +350,6 @@ module RBGL
           host.nil? || host.empty? || host == "unix"
         end
 
-        def transport
-          @transport ||= Transport.new(@socket)
-        end
-
         def request_encoder
           @request_encoder ||= RequestEncoder.new
         end
@@ -367,11 +363,11 @@ module RBGL
         end
 
         def read_packet
-          header = transport.read_exact(32)
+          header = @transport.read_exact(32)
           return header unless header.getbyte(0) == 1
 
           additional = header.byteslice(4, 4).unpack1("V")
-          additional.positive? ? header + transport.read_exact(additional * 4) : header
+          additional.positive? ? header + @transport.read_exact(additional * 4) : header
         rescue EOFError => error
           raise GUI::BackendUnavailable, error.message
         end
@@ -391,13 +387,6 @@ module RBGL
           @sequence = (@sequence + 1) & 0xFFFF
         end
 
-        def pack_property_data(data, format)
-          request_encoder.pack_property_data(data, format)
-        end
-
-        def pad_to_4(str)
-          request_encoder.pad_to_4(str)
-        end
       end
     end
   end

@@ -6,6 +6,7 @@ class RasterizerTest < Test::Unit::TestCase
   setup do
     @fb = RBGL::Engine::Framebuffer.new(100, 100)
     @rasterizer = RBGL::Engine::Rasterizer.new(@fb)
+    @interpolator = RBGL::Engine::Rasterizer::AttributeInterpolator.new
     @fragment_shader = RBGL::Engine::FragmentShader.new do |_input, _uniforms, output|
       output.color = Larb::Color.new(1, 0, 0, 1)
     end
@@ -125,30 +126,22 @@ class RasterizerTest < Test::Unit::TestCase
   end
 
   test "interpolate_value handles supported attribute types" do
-    vec2 = @rasterizer.send(
-      :interpolate_value,
-      Larb::Vec2.new(0.0, 1.0),
-      Larb::Vec2.new(2.0, 3.0),
-      Larb::Vec2.new(4.0, 5.0),
-      0.25, 0.25, 0.5
+    vec2 = @interpolator.interpolate_values(
+      [Larb::Vec2.new(0.0, 1.0), Larb::Vec2.new(2.0, 3.0), Larb::Vec2.new(4.0, 5.0)],
+      [0.25, 0.25, 0.5]
     )
-    vec3 = @rasterizer.send(
-      :interpolate_value,
-      Larb::Vec3.new(0.0, 1.0, 2.0),
-      Larb::Vec3.new(2.0, 3.0, 4.0),
-      Larb::Vec3.new(4.0, 5.0, 6.0),
-      0.25, 0.25, 0.5
+    vec3 = @interpolator.interpolate_values(
+      [Larb::Vec3.new(0.0, 1.0, 2.0), Larb::Vec3.new(2.0, 3.0, 4.0), Larb::Vec3.new(4.0, 5.0, 6.0)],
+      [0.25, 0.25, 0.5]
     )
-    vec4 = @rasterizer.send(
-      :interpolate_value,
-      Larb::Vec4.new(0.0, 1.0, 2.0, 3.0),
-      Larb::Vec4.new(2.0, 3.0, 4.0, 5.0),
-      Larb::Vec4.new(4.0, 5.0, 6.0, 7.0),
-      0.25, 0.25, 0.5
+    vec4 = @interpolator.interpolate_values(
+      [Larb::Vec4.new(0.0, 1.0, 2.0, 3.0), Larb::Vec4.new(2.0, 3.0, 4.0, 5.0),
+       Larb::Vec4.new(4.0, 5.0, 6.0, 7.0)],
+      [0.25, 0.25, 0.5]
     )
-    numeric = @rasterizer.send(:interpolate_value, 1.0, 3.0, 5.0, 0.25, 0.25, 0.5)
+    numeric = @interpolator.interpolate_values([1.0, 3.0, 5.0], [0.25, 0.25, 0.5])
     passthrough = Object.new
-    same_object = @rasterizer.send(:interpolate_value, passthrough, Object.new, Object.new, 0.25, 0.25, 0.5)
+    same_object = @interpolator.interpolate_values([passthrough, Object.new, Object.new], [0.25, 0.25, 0.5])
 
     assert_kind_of Larb::Vec2, vec2
     assert_in_delta 2.5, vec2.x, 0.001
@@ -171,7 +164,7 @@ class RasterizerTest < Test::Unit::TestCase
     v1[:weight] = 3.0
     v1[:tag] = :finish
 
-    result = @rasterizer.send(:interpolate_line_attributes, v0, v1, 0.25)
+    result = interpolate_line(v0, v1, 0.25)
 
     assert_in_delta 1.5, result[:weight], 0.001
     assert_equal :start, result[:tag]
@@ -188,7 +181,7 @@ class RasterizerTest < Test::Unit::TestCase
     v1[:uv] = Larb::Vec2.new(1.0, 0.0)
     v1[:color] = Larb::Color.new(0.0, 0.0, 1.0, 0.5)
 
-    result = @rasterizer.send(:interpolate_line_attributes, v0, v1, 0.25)
+    result = interpolate_line(v0, v1, 0.25)
 
     assert_in_delta 0.25, result[:uv].x, 0.001
     assert_in_delta 0.75, result[:uv].y, 0.001
@@ -204,7 +197,7 @@ class RasterizerTest < Test::Unit::TestCase
       Larb::Vec4.new(0.0, 0.0, 0.0, 4.0)
     ]
 
-    weights = @rasterizer.send(:perspective_correct_weights, positions, [0.25, 0.25, 0.5])
+    weights = @interpolator.perspective_correct_weights(positions, [0.25, 0.25, 0.5])
 
     assert_in_delta 0.5, weights[0], 0.001
     assert_in_delta 0.25, weights[1], 0.001
@@ -220,7 +213,7 @@ class RasterizerTest < Test::Unit::TestCase
     v1[:position] = Larb::Vec4.new(0.5, 0.0, 0.0, 2.0)
     v1[:weight] = 1.0
 
-    result = @rasterizer.send(:interpolate_line_attributes, v0, v1, 0.5)
+    result = interpolate_line(v0, v1, 0.5)
 
     assert_in_delta(1.0 / 3.0, result[:weight], 0.001)
   end
@@ -236,5 +229,11 @@ class RasterizerTest < Test::Unit::TestCase
 
   def colored_pixel_count
     @fb.color_buffer.count { |color| color.r.positive? || color.g.positive? || color.b.positive? }
+  end
+
+  def interpolate_line(v0, v1, t)
+    positions = [v0[:position], v1[:position]]
+    weights = @interpolator.perspective_correct_weights(positions, [1.0 - t, t])
+    @interpolator.interpolate([v0, v1], weights)
   end
 end

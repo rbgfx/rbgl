@@ -86,23 +86,6 @@ module RBGL
         (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x)
       end
 
-      def interpolate_attributes(v0, v1, v2, w0, w1, w2)
-        @attribute_interpolator.interpolate([v0, v1, v2], [w0, w1, w2])
-      end
-
-      def interpolate_value(a, b, c, w0, w1, w2)
-        @attribute_interpolator.interpolate_values([a, b, c], [w0, w1, w2])
-      end
-
-      def interpolate_line_attributes(v0, v1, t)
-        corrected_weights = perspective_correct_weights([v0[:position], v1[:position]], [1.0 - t, t])
-        @attribute_interpolator.interpolate([v0, v1], corrected_weights)
-      end
-
-      def perspective_correct_weights(positions, weights)
-        @attribute_interpolator.perspective_correct_weights(positions, weights)
-      end
-
       def state(cull_mode:, depth_test:, depth_write:, blend_mode:)
         {
           cull_mode: cull_mode,

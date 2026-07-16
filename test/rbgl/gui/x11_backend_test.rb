@@ -135,7 +135,7 @@ class X11ConnectionTest < Test::Unit::TestCase
     writer.flush
     assert_equal 1, connection.pending
 
-    connection.send(:transport).read_exact(1)
+    connection.instance_variable_get(:@transport).read_exact(1)
     assert_equal 0, connection.pending
   ensure
     reader&.close unless reader&.closed?
@@ -305,12 +305,12 @@ class X11ConnectionTest < Test::Unit::TestCase
     end
   end
 
-  test "pack_property_data supports 8 16 and 32 bit values" do
-    connection = build_connection
+  test "request encoder packs 8 16 and 32 bit property values" do
+    encoder = RBGL::GUI::X11::RequestEncoder.new
 
-    bytes8, count8 = connection.send(:pack_property_data, "abc", 8)
-    bytes16, count16 = connection.send(:pack_property_data, [1, 2], 16)
-    bytes32, count32 = connection.send(:pack_property_data, [3, 4], 32)
+    bytes8, count8 = encoder.pack_property_data("abc", 8)
+    bytes16, count16 = encoder.pack_property_data([1, 2], 16)
+    bytes32, count32 = encoder.pack_property_data([3, 4], 32)
 
     assert_equal "abc", bytes8
     assert_equal 3, count8
@@ -320,7 +320,7 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 2, count32
 
     assert_raise(ArgumentError) do
-      connection.send(:pack_property_data, [1], 64)
+      encoder.pack_property_data([1], 64)
     end
   end
 
@@ -351,8 +351,9 @@ class X11ConnectionTest < Test::Unit::TestCase
     connection.instance_variable_set(:@pending_events, [])
     payload = "\x00" * 32
     payload.setbyte(0, 12)
-    connection.instance_variable_set(:@socket, FakeSocket.new(payload))
-    connection.instance_variable_set(:@transport, nil)
+    socket = FakeSocket.new(payload)
+    connection.instance_variable_set(:@socket, socket)
+    connection.instance_variable_set(:@transport, RBGL::GUI::X11::Transport.new(socket))
 
     assert_equal({ type: :exposure }, connection.next_event)
   end
@@ -584,8 +585,9 @@ class X11ConnectionTest < Test::Unit::TestCase
       payload = "\x00" * 32
       payload[0, 1] = [type].pack("C")
       builder.call(payload)
-      connection.instance_variable_set(:@socket, FakeSocket.new(payload))
-      connection.instance_variable_set(:@transport, nil)
+      socket = FakeSocket.new(payload)
+      connection.instance_variable_set(:@socket, socket)
+      connection.instance_variable_set(:@transport, RBGL::GUI::X11::Transport.new(socket))
 
       assert_equal expected, connection.send(:read_event)
     end
@@ -687,6 +689,7 @@ class X11ConnectionTest < Test::Unit::TestCase
   def build_connection(socket: FakeSocket.new)
     connection = RBGL::GUI::X11::Connection.allocate
     connection.instance_variable_set(:@socket, socket)
+    connection.instance_variable_set(:@transport, RBGL::GUI::X11::Transport.new(socket))
     connection.instance_variable_set(:@pending_events, [])
     connection.instance_variable_set(:@pending_replies, {})
     connection.instance_variable_set(:@sequence, 0)
@@ -727,9 +730,9 @@ class X11ConnectionTest < Test::Unit::TestCase
 end
 
 class X11BackendTest < Test::Unit::TestCase
-  test "present returns false when no window handle is available" do
+  test "present returns false when no window is available" do
     backend = RBGL::GUI::X11::Backend.allocate
-    backend.instance_variable_set(:@handle, nil)
+    backend.instance_variable_set(:@window, nil)
 
     assert_false backend.present(RBGL::Engine::Framebuffer.new(1, 1))
   end
@@ -751,8 +754,7 @@ class X11BackendTest < Test::Unit::TestCase
     display.define_singleton_method(:flush) { flushed += 1 }
 
     backend.instance_variable_set(:@display, display)
-    backend.instance_variable_set(:@handle, 9)
-    backend.instance_variable_set(:@windows, { 9 => { gc: 12 } })
+    backend.instance_variable_set(:@window, { id: 9, gc: 12 })
 
     assert_true backend.present(framebuffer)
     assert_equal 1, flushed
@@ -857,7 +859,7 @@ class X11BackendTest < Test::Unit::TestCase
     backend = RBGL::GUI::X11::Backend.allocate
     display = FakeDisplay.new
     backend.instance_variable_set(:@display, display)
-    backend.instance_variable_set(:@windows, {})
+    backend.instance_variable_set(:@window, nil)
 
     backend.send(:setup_window, 320, 240, "RBGL")
 
@@ -870,8 +872,7 @@ class X11BackendTest < Test::Unit::TestCase
     display = FakeDisplay.new
     framebuffer = RBGL::Engine::Framebuffer.new(2, 2)
     backend.instance_variable_set(:@display, display)
-    backend.instance_variable_set(:@handle, 101)
-    backend.instance_variable_set(:@windows, { 101 => { gc: 202 } })
+    backend.instance_variable_set(:@window, { id: 101, gc: 202 })
 
     backend.present(framebuffer)
 
@@ -885,8 +886,7 @@ class X11BackendTest < Test::Unit::TestCase
     backend = RBGL::GUI::X11::Backend.allocate
     display = FakeDisplay.new
     backend.instance_variable_set(:@display, display)
-    backend.instance_variable_set(:@handle, 101)
-    backend.instance_variable_set(:@windows, { 101 => { should_close: false } })
+    backend.instance_variable_set(:@window, { id: 101, should_close: false })
     display.set_events([
       { type: :key_press, keycode: 65 },
       { type: :button_press, x: 1, y: 2, button: 1 },
@@ -901,17 +901,16 @@ class X11BackendTest < Test::Unit::TestCase
     assert_equal 65, events.first.keycode
   end
 
-  test "close destroys the current window and clears the handle" do
+  test "close destroys and clears the current window" do
     backend = RBGL::GUI::X11::Backend.allocate
     display = FakeDisplay.new
     backend.instance_variable_set(:@display, display)
-    backend.instance_variable_set(:@handle, 101)
-    backend.instance_variable_set(:@windows, { 101 => { should_close: false } })
+    backend.instance_variable_set(:@window, { id: 101, should_close: false })
 
     backend.close
 
     assert_equal [101], display.destroy_window_calls
-    assert_nil backend.instance_variable_get(:@handle)
+    assert_nil backend.instance_variable_get(:@window)
   end
 
   test "convert_event handles key mouse and resize event kinds" do
@@ -936,8 +935,7 @@ class X11BackendTest < Test::Unit::TestCase
     backend = RBGL::GUI::X11::Backend.allocate
     display = FakeDisplay.new
     backend.instance_variable_set(:@display, display)
-    backend.instance_variable_set(:@handle, 101)
-    backend.instance_variable_set(:@windows, { 101 => { should_close: false } })
+    backend.instance_variable_set(:@window, { id: 101, should_close: false })
 
     ignored = backend.send(
       :convert_event,
@@ -963,8 +961,7 @@ class X11BackendTest < Test::Unit::TestCase
     backend = RBGL::GUI::X11::Backend.allocate
     display = FakeDisplay.new
     backend.instance_variable_set(:@display, display)
-    backend.instance_variable_set(:@handle, 101)
-    backend.instance_variable_set(:@windows, { 101 => { should_close: false } })
+    backend.instance_variable_set(:@window, { id: 101, should_close: false })
 
     event = backend.send(
       :convert_event,
@@ -982,8 +979,7 @@ class X11BackendTest < Test::Unit::TestCase
     backend = RBGL::GUI::X11::Backend.allocate
     display = FakeDisplay.new
     backend.instance_variable_set(:@display, display)
-    backend.instance_variable_set(:@handle, 101)
-    backend.instance_variable_set(:@windows, { 101 => { should_close: false } })
+    backend.instance_variable_set(:@window, { id: 101, should_close: false })
 
     event = backend.send(
       :convert_event,
