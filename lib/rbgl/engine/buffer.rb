@@ -143,6 +143,10 @@ module RBGL
       attr_reader :data, :layout, :vertex_count
 
       def initialize(layout)
+        unless layout.is_a?(VertexLayout)
+          raise ArgumentError, "VertexBuffer layout must be an RBGL::Engine::VertexLayout"
+        end
+
         @layout = layout
         @data = []
         @vertex_count = 0

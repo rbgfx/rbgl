@@ -83,6 +83,12 @@ class VertexBufferTest < Test::Unit::TestCase
     assert_equal [], buffer.data
   end
 
+  test "rejects values that are not vertex layouts" do
+    error = assert_raise(ArgumentError) { RBGL::Engine::VertexBuffer.new([]) }
+
+    assert_includes error.message, "VertexLayout"
+  end
+
   test "adds vertex with array values" do
     buffer = RBGL::Engine::VertexBuffer.new(@layout)
     buffer.add_vertex(position: [1.0, 2.0, 3.0], color: [1.0, 0.0, 0.0, 1.0])

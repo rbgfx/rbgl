@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "version"
 require_relative "engine/framebuffer"
 require_relative "engine/buffer"
 require_relative "engine/shader"
@@ -11,6 +12,6 @@ require_relative "engine/context"
 
 module RBGL
   module Engine
-    VERSION = "0.1.0"
+    VERSION = RBGL::VERSION
   end
 end

@@ -11,15 +11,10 @@ module RBGL
 
       def process(input, uniforms)
         output = ShaderIO.new
-        @input = input
-        @uniforms = uniforms
-        @output = output
 
         instance_exec(input, uniforms, output, &@process_block)
         finalize_output(output)
       end
-
-      attr_reader :input, :uniforms, :output
 
       def self.create(&block)
         new(&block)

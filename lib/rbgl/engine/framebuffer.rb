@@ -28,7 +28,7 @@ module RBGL
       def set_pixel(x, y, color)
         return if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @color_buffer[y * @width + x] = color
+        @color_buffer[y * @width + x] = duplicate_color(color)
       end
 
       def get_depth(x, y)
@@ -55,12 +55,12 @@ module RBGL
       end
 
       def clear(color: Larb::Color.black, depth: Float::INFINITY)
-        @color_buffer.fill(color)
+        @color_buffer = Array.new(@width * @height) { duplicate_color(color) }
         @depth_buffer.fill(depth)
       end
 
       def clear_color(color)
-        @color_buffer.fill(color)
+        @color_buffer = Array.new(@width * @height) { duplicate_color(color) }
       end
 
       def clear_depth(depth = Float::INFINITY)
@@ -108,8 +108,14 @@ module RBGL
             alpha + destination.a * inv_alpha
           )
         else
-          source
+          duplicate_color(source)
         end
+      end
+
+      def duplicate_color(color)
+        return Larb::Color.new(color.r, color.g, color.b, color.a) if color.is_a?(Larb::Color)
+
+        raise ArgumentError, "Framebuffer colors must be Larb::Color values"
       end
 
       def packed_color_bytes(channels)

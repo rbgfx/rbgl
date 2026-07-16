@@ -63,7 +63,7 @@ class TextureTest < Test::Unit::TestCase
   test "set_pixel sets pixel at position" do
     red = Larb::Color.new(1.0, 0.0, 0.0, 1.0)
     @tex.set_pixel(2, 2, red)
-    assert_equal red, @tex.get_pixel(2, 2)
+    assert_equal red.to_a, @tex.get_pixel(2, 2).to_a
   end
 
   test "set_pixel rejects unsupported pixel types" do
@@ -190,7 +190,27 @@ class TextureTest < Test::Unit::TestCase
   test "solid creates solid color texture" do
     red = Larb::Color.new(1.0, 0.0, 0.0, 1.0)
     tex = RBGL::Engine::Texture.solid(4, 4, red)
-    assert_equal red, tex.get_pixel(2, 2)
+    assert_equal red.to_a, tex.get_pixel(2, 2).to_a
+  end
+
+  test "solid stores independent color objects for every texel" do
+    red = Larb::Color.red
+    tex = RBGL::Engine::Texture.solid(2, 1, red)
+
+    tex.get_pixel(0, 0).r = 0.25
+    red.g = 0.5
+
+    assert_in_delta 1.0, tex.get_pixel(1, 0).r, 0.001
+    assert_in_delta 0.0, tex.get_pixel(1, 0).g, 0.001
+  end
+
+  test "set_pixel does not retain caller-owned colors" do
+    red = Larb::Color.red
+    @tex.set_pixel(0, 0, red)
+
+    red.r = 0.25
+
+    assert_in_delta 1.0, @tex.get_pixel(0, 0).r, 0.001
   end
 
   test "WRAP constants are defined" do

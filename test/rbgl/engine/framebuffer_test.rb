@@ -51,7 +51,7 @@ class FramebufferTest < Test::Unit::TestCase
   test "set_pixel sets color at position" do
     red = Larb::Color.new(1.0, 0.0, 0.0, 1.0)
     @fb.set_pixel(5, 5, red)
-    assert_equal red, @fb.get_pixel(5, 5)
+    assert_equal red.to_a, @fb.get_pixel(5, 5).to_a
   end
 
   test "set_pixel ignores out of bounds" do
@@ -83,7 +83,7 @@ class FramebufferTest < Test::Unit::TestCase
     red = Larb::Color.new(1.0, 0.0, 0.0, 1.0)
     result = @fb.write_pixel(5, 5, red, 0.5)
     assert_true result
-    assert_equal red, @fb.get_pixel(5, 5)
+    assert_equal red.to_a, @fb.get_pixel(5, 5).to_a
     assert_equal 0.5, @fb.get_depth(5, 5)
   end
 
@@ -94,7 +94,7 @@ class FramebufferTest < Test::Unit::TestCase
     @fb.write_pixel(5, 5, red, 0.5)
     result = @fb.write_pixel(5, 5, blue, 0.6)
     assert_false result
-    assert_equal red, @fb.get_pixel(5, 5)
+    assert_equal red.to_a, @fb.get_pixel(5, 5).to_a
   end
 
   test "write_pixel can disable depth test" do
@@ -104,7 +104,7 @@ class FramebufferTest < Test::Unit::TestCase
     @fb.write_pixel(5, 5, red, 0.5)
     result = @fb.write_pixel(5, 5, blue, 0.6, depth_test: false)
     assert_true result
-    assert_equal blue, @fb.get_pixel(5, 5)
+    assert_equal blue.to_a, @fb.get_pixel(5, 5).to_a
   end
 
   test "write_pixel can disable depth write" do
@@ -113,7 +113,7 @@ class FramebufferTest < Test::Unit::TestCase
     result = @fb.write_pixel(5, 5, red, 0.5, depth_write: false)
 
     assert_true result
-    assert_equal red, @fb.get_pixel(5, 5)
+    assert_equal red.to_a, @fb.get_pixel(5, 5).to_a
     assert_equal Float::INFINITY, @fb.get_depth(5, 5)
   end
 
@@ -154,6 +154,27 @@ class FramebufferTest < Test::Unit::TestCase
 
     assert_equal 1.0, @fb.get_pixel(0, 0).r
     assert_equal 1.0, @fb.get_depth(0, 0)
+  end
+
+  test "clear stores independent color objects for every pixel" do
+    red = Larb::Color.red
+    @fb.clear(color: red)
+
+    @fb.get_pixel(0, 0).r = 0.25
+
+    assert_in_delta 1.0, @fb.get_pixel(1, 0).r, 0.001
+    assert_not_same red, @fb.get_pixel(0, 0)
+  end
+
+  test "pixel writes do not retain caller-owned color objects" do
+    color = Larb::Color.red
+    @fb.set_pixel(0, 0, color)
+    @fb.write_pixel(1, 0, color, 0.0)
+
+    color.r = 0.25
+
+    assert_in_delta 1.0, @fb.get_pixel(0, 0).r, 0.001
+    assert_in_delta 1.0, @fb.get_pixel(1, 0).r, 0.001
   end
 
   test "clear_color only clears color buffer" do

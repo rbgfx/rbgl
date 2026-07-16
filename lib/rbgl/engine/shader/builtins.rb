@@ -65,6 +65,8 @@ module RBGL
         when Numeric then a + (b - a) * t
         when Larb::Vec2, Larb::Vec3, Larb::Vec4 then a.lerp(b, t)
         when Larb::Color then a.lerp(b, t)
+        else
+          raise ArgumentError, "Unsupported mix operand: #{a.class}"
         end
       end
 
@@ -83,6 +85,8 @@ module RBGL
 
       def smoothstep(edge0, edge1, x)
         component_ternary_map(edge0, edge1, x) do |e0, e1, value|
+          next value < e0 ? 0.0 : 1.0 if e0 == e1
+
           t = ((value - e0) / (e1 - e0)).clamp(0.0, 1.0)
           t * t * (3.0 - 2.0 * t)
         end

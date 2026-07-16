@@ -14,4 +14,9 @@ class VersionTest < Test::Unit::TestCase
   test "VERSION follows semantic versioning" do
     assert_match(/\A\d+\.\d+\.\d+/, RBGL::VERSION)
   end
+
+  test "component versions match the gem version" do
+    assert_equal RBGL::VERSION, RBGL::Engine::VERSION
+    assert_equal RBGL::VERSION, RBGL::GUI::VERSION
+  end
 end

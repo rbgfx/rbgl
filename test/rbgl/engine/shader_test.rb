@@ -190,6 +190,12 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 1.0, c.x
   end
 
+  test "mix rejects unsupported operand types" do
+    error = assert_raise(ArgumentError) { mix(:red, :blue, 0.5) }
+
+    assert_includes error.message, "Symbol"
+  end
+
   test "clamp clamps number" do
     assert_equal 0.5, clamp(0.5, 0.0, 1.0)
     assert_equal 0.0, clamp(-1.0, 0.0, 1.0)
@@ -233,6 +239,11 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 0.0, smoothstep(0.0, 1.0, 0.0)
     assert_equal 1.0, smoothstep(0.0, 1.0, 1.0)
     assert_in_delta 0.5, smoothstep(0.0, 1.0, 0.5), 0.01
+  end
+
+  test "smoothstep handles equal edges without producing NaN" do
+    assert_equal 0.0, smoothstep(0.5, 0.5, 0.4)
+    assert_equal 1.0, smoothstep(0.5, 0.5, 0.5)
   end
 
   test "step returns 0 or 1" do
