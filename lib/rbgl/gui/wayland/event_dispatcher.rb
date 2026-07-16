@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "input_mapper"
+
 module RBGL
   module GUI
     module Wayland
@@ -21,6 +23,12 @@ module RBGL
             object.handle_done if opcode == 0
           when WlBuffer
             object.handle_release if opcode == 0
+          when Seat
+            object.handle_capabilities(payload.unpack1("V")) if opcode == 0
+          when Keyboard
+            handle_keyboard_event(object, opcode, payload)
+          when Pointer
+            handle_pointer_event(object, opcode, payload)
           when XdgWmBase
             handle_xdg_wm_base_event(object, opcode, payload)
           when XdgSurface
@@ -59,6 +67,56 @@ module RBGL
 
           object.pong(payload.unpack1("V"))
           @connection.flush
+        end
+
+        def handle_keyboard_event(keyboard, opcode, payload)
+          case opcode
+          when 1
+            keyboard.focus(payload.byteslice(4, 4).unpack1("V"))
+          when 2
+            keyboard.blur
+          when 3
+            _serial, _time, keycode, state = payload.unpack("V4")
+            @connection.queue_event(
+              type: state == 1 ? :key_press : :key_release,
+              surface_id: keyboard.focused_surface_id,
+              key: InputMapper.key(keycode),
+              keycode: keycode
+            )
+          end
+        end
+
+        def handle_pointer_event(pointer, opcode, payload)
+          case opcode
+          when 0
+            _serial, surface_id, x, y = payload.unpack("VVl<l<")
+            pointer.focus(surface_id)
+            queue_pointer_motion(pointer, x, y)
+          when 1
+            pointer.blur
+          when 2
+            _time, x, y = payload.unpack("Vl<l<")
+            queue_pointer_motion(pointer, x, y)
+          when 3
+            _serial, _time, button, state = payload.unpack("V4")
+            @connection.queue_event(
+              type: state == 1 ? :pointer_button_press : :pointer_button_release,
+              surface_id: pointer.focused_surface_id,
+              button: InputMapper.button(button),
+              x: pointer.x,
+              y: pointer.y
+            )
+          end
+        end
+
+        def queue_pointer_motion(pointer, fixed_x, fixed_y)
+          pointer.move(fixed_x / 256.0, fixed_y / 256.0)
+          @connection.queue_event(
+            type: :pointer_motion,
+            surface_id: pointer.focused_surface_id,
+            x: pointer.x,
+            y: pointer.y
+          )
         end
 
         def handle_xdg_toplevel_event(object_id, opcode, payload)

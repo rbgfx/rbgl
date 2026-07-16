@@ -9,9 +9,10 @@ module RBGL
         BINDINGS = {
           "wl_compositor" => [:compositor, Compositor, 4],
           "wl_shm" => [:shm, Shm, 1],
-          "xdg_wm_base" => [:xdg_wm_base, XdgWmBase, 2]
+          "xdg_wm_base" => [:xdg_wm_base, XdgWmBase, 2],
+          "wl_seat" => [:seat, Seat, 5]
         }.freeze
-        REQUIRED_INTERFACES = BINDINGS.keys.freeze
+        REQUIRED_INTERFACES = %w[wl_compositor wl_shm xdg_wm_base].freeze
 
         def initialize(connection)
           @connection = connection

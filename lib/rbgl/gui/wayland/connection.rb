@@ -15,7 +15,7 @@ module RBGL
         ROUNDTRIP_POLL_INTERVAL = 0.01
         READ_CHUNK_SIZE = 16_384
 
-        attr_reader :compositor, :shm, :xdg_wm_base, :registry, :globals
+        attr_reader :compositor, :shm, :xdg_wm_base, :seat, :registry, :globals
 
         def initialize(env: ENV, socket_path: nil, roundtrip_timeout: DEFAULT_ROUNDTRIP_TIMEOUT)
           @env = env
@@ -201,6 +201,7 @@ module RBGL
           @compositor = bound[:compositor]
           @shm = bound[:shm]
           @xdg_wm_base = bound[:xdg_wm_base]
+          @seat = bound[:seat]
           flush
           roundtrip
         end

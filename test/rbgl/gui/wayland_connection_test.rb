@@ -117,6 +117,27 @@ class WaylandProtocolObjectsTest < Test::Unit::TestCase
 
     assert_true callback.done?
   end
+
+  test "seat creates and releases pointer and keyboard objects from capabilities" do
+    connection = RecordingConnection.new([31, 32])
+    seat = RBGL::GUI::Wayland::Seat.new(connection, 30)
+
+    seat.handle_capabilities(3)
+
+    assert_equal 31, seat.pointer.id
+    assert_equal 32, seat.keyboard.id
+    assert_equal [
+      [30, 0, [[:new_id, 31]]],
+      [30, 1, [[:new_id, 32]]]
+    ], connection.requests
+
+    seat.handle_capabilities(0)
+
+    assert_nil seat.pointer
+    assert_nil seat.keyboard
+    assert_equal [31, 1, []], connection.requests[-2]
+    assert_equal [32, 0, []], connection.requests[-1]
+  end
 end
 
 class WaylandConnectionTest < Test::Unit::TestCase
@@ -186,6 +207,30 @@ class WaylandConnectionTest < Test::Unit::TestCase
     end
 
     assert_includes error.message, "xdg_wm_base"
+  end
+
+  test "bind_globals binds an optional seat when advertised" do
+    allocated_ids = [11, 12, 13, 14]
+    registry = SpyRegistry.new(7, allocated_ids.dup)
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    connection.instance_variable_set(:@registry, registry)
+    connection.instance_variable_set(
+      :@globals,
+      {
+        "wl_compositor" => { name: 1, version: 5 },
+        "wl_shm" => { name: 2, version: 1 },
+        "xdg_wm_base" => { name: 3, version: 4 },
+        "wl_seat" => { name: 4, version: 7 }
+      }
+    )
+    connection.instance_variable_set(:@objects, { registry.id => registry })
+    connection.define_singleton_method(:flush) {}
+    connection.define_singleton_method(:roundtrip) {}
+
+    connection.send(:bind_globals)
+
+    assert_equal [4, "wl_seat", 5], registry.bind_calls.last
+    assert_equal 14, connection.seat.id
   end
 
   test "handle_event queues toplevel close events" do
@@ -258,6 +303,45 @@ class WaylandConnectionTest < Test::Unit::TestCase
     connection.send(:handle_event, 14, 0, +"")
 
     assert_true buffer.available?
+  end
+
+  test "handle_event converts keyboard focus and key events" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    keyboard = RBGL::GUI::Wayland::Keyboard.new(connection, 21)
+    connection.instance_variable_set(:@objects, { 21 => keyboard })
+    connection.instance_variable_set(:@pending_events, [])
+
+    connection.send(:handle_event, 21, 1, [9, 10, 0].pack("V3"))
+    connection.send(:handle_event, 21, 3, [9, 100, 1, 1].pack("V4"))
+    connection.send(:handle_event, 21, 3, [10, 110, 1, 0].pack("V4"))
+
+    assert_equal [
+      { type: :key_press, surface_id: 10, key: :escape, keycode: 1 },
+      { type: :key_release, surface_id: 10, key: :escape, keycode: 1 }
+    ], connection.instance_variable_get(:@pending_events)
+  end
+
+  test "handle_event converts pointer motion and button events" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    pointer = RBGL::GUI::Wayland::Pointer.new(connection, 22)
+    connection.instance_variable_set(:@objects, { 22 => pointer })
+    connection.instance_variable_set(:@pending_events, [])
+
+    connection.send(:handle_event, 22, 0, [9, 10, 1280, 2560].pack("VVl<l<"))
+    connection.send(:handle_event, 22, 2, [100, 1536, 2816].pack("Vl<l<"))
+    connection.send(:handle_event, 22, 3, [9, 100, 0x110, 1].pack("V4"))
+
+    assert_equal [
+      { type: :pointer_motion, surface_id: 10, x: 5.0, y: 10.0 },
+      { type: :pointer_motion, surface_id: 10, x: 6.0, y: 11.0 },
+      { type: :pointer_button_press, surface_id: 10, button: 1, x: 6.0, y: 11.0 }
+    ], connection.instance_variable_get(:@pending_events)
+  end
+
+  test "input mapper preserves unknown codes while normalizing common input" do
+    assert_equal :a, RBGL::GUI::Wayland::InputMapper.key(30)
+    assert_equal 999, RBGL::GUI::Wayland::InputMapper.key(999)
+    assert_equal 3, RBGL::GUI::Wayland::InputMapper.button(0x111)
   end
 
   test "pack_args encodes typed wayland arguments" do
@@ -479,6 +563,38 @@ class WaylandBackendTest < Test::Unit::TestCase
 
     assert_equal [:resize, :close], events.map(&:type)
     assert_true backend.should_close?
+  end
+
+  test "poll_events converts keyboard and pointer events for the focused surface" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    surface = FakeObject.new(10)
+    toplevel = FakeObject.new(33)
+    backend.instance_variable_set(:@handle, 10)
+    backend.instance_variable_set(
+      :@windows,
+      {
+        10 => {
+          surface: surface,
+          toplevel: toplevel,
+          should_close: false
+        }
+      }
+    )
+    backend.instance_variable_set(
+      :@connection,
+      FakeConnection.new([
+        { type: :key_press, surface_id: 10, key: :escape, keycode: 1 },
+        { type: :pointer_motion, surface_id: 10, x: 12.5, y: 20.0 },
+        { type: :pointer_button_press, surface_id: 10, button: 1, x: 12.5, y: 20.0 }
+      ])
+    )
+
+    events = backend.poll_events
+
+    assert_equal %i[key_press mouse_move mouse_press], events.map(&:type)
+    assert_equal :escape, events[0].key
+    assert_equal 12.5, events[1].x
+    assert_equal 1, events[2].button
   end
 
   test "close destroys wayland window resources and clears handle" do

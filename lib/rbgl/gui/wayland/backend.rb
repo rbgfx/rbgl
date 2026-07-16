@@ -120,7 +120,7 @@ module RBGL
         end
 
         def convert_event(raw)
-          window = window_for_event(raw[:object_id])
+          window = window_for_event(raw[:surface_id] || raw[:object_id])
           return nil unless window
 
           case raw[:type]
@@ -135,11 +135,21 @@ module RBGL
             window[:width] = width
             window[:height] = height
             Event.new(:resize, width: width, height: height)
+          when :key_press, :key_release
+            Event.new(raw[:type], key: raw[:key], keycode: raw[:keycode])
+          when :pointer_motion
+            Event.new(:mouse_move, x: raw[:x], y: raw[:y])
+          when :pointer_button_press
+            Event.new(:mouse_press, button: raw[:button], x: raw[:x], y: raw[:y])
+          when :pointer_button_release
+            Event.new(:mouse_release, button: raw[:button], x: raw[:x], y: raw[:y])
           end
         end
 
         def window_for_event(object_id)
-          @windows.values.find { |window| window[:toplevel].id == object_id }
+          @windows.values.find do |window|
+            window[:toplevel].id == object_id || window[:surface].id == object_id
+          end
         end
 
         def next_available_buffer(window)
