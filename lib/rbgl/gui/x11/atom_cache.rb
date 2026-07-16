@@ -17,8 +17,11 @@ module RBGL
 
         def fetch(name)
           return name if name.is_a?(Integer)
+          return @cache[name] if @cache.key?(name)
 
-          @cache[name] ||= @resolver.call(name)
+          resolved = @resolver.call(name)
+          @cache[name] = resolved unless resolved.zero?
+          resolved
         end
       end
     end

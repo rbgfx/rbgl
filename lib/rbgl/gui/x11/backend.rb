@@ -8,7 +8,7 @@ module RBGL
       class Backend < GUI::Backend
         def initialize(width, height, title = "RBGL", env: ENV)
           super(width, height, title)
-          @display = Connection.new(env["DISPLAY"] || ":0")
+          @display = Connection.new(env["DISPLAY"] || ":0", env: env)
           @windows = {}
           setup_window(width, height, title)
         end
@@ -100,8 +100,10 @@ module RBGL
 
           @windows[@handle][:should_close] = true
           @display.destroy_window(@handle)
+          @display.flush
           @windows.delete(@handle)
           @handle = nil
+          @display.close
         end
 
         private

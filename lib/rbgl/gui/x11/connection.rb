@@ -6,22 +6,34 @@ require_relative "atom_cache"
 require_relative "event_parser"
 require_relative "request_encoder"
 require_relative "transport"
+require_relative "x_authority"
 
 module RBGL
   module GUI
     module X11
       class Connection
+        ATOM_NAMES = {
+          wm_protocols: "WM_PROTOCOLS",
+          wm_delete_window: "WM_DELETE_WINDOW"
+        }.freeze
+
         attr_reader :default_screen, :resource_id_base, :resource_id_mask
         attr_reader :root, :root_depth, :root_visual, :white_pixel, :black_pixel
 
-        def initialize(display_name)
-          host, display_num, _screen_num = parse_display_name(display_name)
+        def initialize(display_name, env: ENV)
+          host, display_num, screen_num = parse_display_name(display_name)
           @socket = connect(host, display_num)
           @transport = Transport.new(@socket)
           @resource_id_counter = 0
           @pending_events = []
+          @pending_replies = {}
+          @sequence = 0
+          @default_screen = screen_num
 
-          handshake
+          handshake(host: host, display_num: display_num, env: env)
+        rescue StandardError
+          @transport&.close
+          raise
         end
 
         def generate_id
@@ -54,7 +66,7 @@ module RBGL
         end
 
         def pending
-          transport.pending
+          @pending_events.length + transport.pending
         end
 
         def create_window(depth:, wid:, parent:, x:, y:, width:, height:,
@@ -120,10 +132,10 @@ module RBGL
 
         def intern_atom(name, only_if_exists: false)
           request = request_encoder.intern_atom_data(name)
-          send_request(16, request, only_if_exists ? 1 : 0)
+          sequence = send_request(16, request, only_if_exists ? 1 : 0)
           flush
 
-          reply = read_reply
+          reply = read_reply(sequence)
           return 0 unless reply
 
           reply[8, 4].unpack1("V")
@@ -137,10 +149,14 @@ module RBGL
         end
 
         def read_events
-          while pending > 0
+          while transport.pending > 0
             event = read_event
             @pending_events << event if event
           end
+        end
+
+        def close
+          transport.close
         end
 
         private
@@ -164,27 +180,31 @@ module RBGL
           end
         end
 
-        def handshake
-          init_request = [
-            0x6C,
-            0,
-            11, 0,
-            0, 0,
-            0, 0
-          ].pack("CCvvvvvv")
+        def handshake(host: nil, display_num: 0, env: ENV)
+          auth_host = local_display_host?(host) ? nil : host
+          cookie = XAuthority.cookie_for(host: auth_host, display_number: display_num, env: env)
+          auth_name = cookie ? XAuthority::AUTH_NAME : ""
+          auth_data = cookie || ""
+          init_request = [0x6C, 0, 11, 0, auth_name.bytesize, auth_data.bytesize, 0].pack("CCvvvvv")
+          init_request << pad_to_4(auth_name)
+          init_request << pad_to_4(auth_data)
 
-          @socket.write(init_request)
-          @socket.flush
+          transport.write(init_request)
+          transport.flush
 
-          header = @socket.read(8)
+          header = transport.read_exact(8)
           raise GUI::BackendUnavailable, "X11 connection closed during handshake" unless header&.bytesize == 8
 
           status = header.unpack1("C")
-
-          raise GUI::BackendUnavailable, "X11 connection failed" unless status == 1
+          unless status == 1
+            reason_length = header.getbyte(1)
+            reason = reason_length.positive? ? transport.read_exact(pad_length(reason_length)).byteslice(0, reason_length) : nil
+            detail = reason && !reason.empty? ? ": #{reason}" : ""
+            raise GUI::BackendUnavailable, "X11 connection failed#{detail}"
+          end
 
           additional_length = header[6, 2].unpack1("v")
-          data = @socket.read(additional_length * 4)
+          data = transport.read_exact(additional_length * 4)
 
           parse_server_info(data)
         end
@@ -210,56 +230,66 @@ module RBGL
 
         def send_request(opcode, data, extra = 0)
           transport.write(request_encoder.request_packet(opcode, data, extra))
+          next_sequence
         end
 
         def send_request_with_data(opcode, extra, header_data, bulk_data)
           transport.write(request_encoder.request_packet_with_data(opcode, extra, header_data, bulk_data))
+          next_sequence
         end
 
-        def read_reply
-          header = transport.read(32)
-          return nil unless header && header.bytesize == 32
+        def read_reply(expected_sequence = nil)
+          return @pending_replies.delete(expected_sequence) if expected_sequence && @pending_replies.key?(expected_sequence)
 
-          additional = header[4, 4].unpack1("V")
-          if additional > 0
-            header + transport.read(additional * 4)
-          else
-            header
+          loop do
+            packet = read_packet
+            type = packet.getbyte(0)
+            sequence = packet.byteslice(2, 2).unpack1("v")
+
+            case type
+            when 0
+              raise_protocol_error(packet)
+            when 1
+              return packet if expected_sequence.nil? || sequence == expected_sequence
+
+              @pending_replies[sequence] = packet
+            else
+              event = event_parser.parse(packet)
+              @pending_events << event if event
+            end
           end
         end
 
         def read_event
-          event_parser.parse(transport.read(32))
+          packet = read_packet
+          type = packet.getbyte(0)
+          return raise_protocol_error(packet) if type.zero?
+
+          if type == 1
+            sequence = packet.byteslice(2, 2).unpack1("v")
+            @pending_replies[sequence] = packet
+            return nil
+          end
+
+          event_parser.parse(packet)
         end
 
         def resolve_atom(name)
-          case name
-          when :wm_name then 39
-          when :string then 31
-          when :atom then 4
-          when :wm_protocols then intern_atom("WM_PROTOCOLS")
-          when :wm_delete_window then intern_atom("WM_DELETE_WINDOW")
-          else
-            name.is_a?(Integer) ? name : intern_atom(name.to_s)
-          end
-        end
+          return name if name.is_a?(Integer)
 
-        def pack_property_data(data, format)
-          request_encoder.pack_property_data(data, format)
-        end
-
-        def pad_to_4(str)
-          request_encoder.pad_to_4(str)
+          intern_atom(ATOM_NAMES.fetch(name, name.to_s))
         end
 
         def pad_length(len)
           ((len + 3) / 4) * 4
         end
 
-        def transport
-          return @transport if @transport&.socket.equal?(@socket)
+        def local_display_host?(host)
+          host.nil? || host.empty? || host == "unix"
+        end
 
-          @transport = Transport.new(@socket)
+        def transport
+          @transport ||= Transport.new(@socket)
         end
 
         def request_encoder
@@ -272,6 +302,39 @@ module RBGL
 
         def atom_cache
           @atom_cache ||= AtomCache.new { |name| resolve_atom(name) }
+        end
+
+        def read_packet
+          header = transport.read_exact(32)
+          return header unless header.getbyte(0) == 1
+
+          additional = header.byteslice(4, 4).unpack1("V")
+          additional.positive? ? header + transport.read_exact(additional * 4) : header
+        rescue EOFError => error
+          raise GUI::BackendUnavailable, error.message
+        end
+
+        def raise_protocol_error(packet)
+          error_code = packet.getbyte(1)
+          sequence = packet.byteslice(2, 2).unpack1("v")
+          bad_value = packet.byteslice(4, 4).unpack1("V")
+          minor_opcode = packet.byteslice(8, 2).unpack1("v")
+          major_opcode = packet.getbyte(10)
+          raise GUI::BackendUnavailable,
+                "X11 protocol error #{error_code} for request #{sequence} " \
+                "(opcode #{major_opcode}.#{minor_opcode}, value #{bad_value})"
+        end
+
+        def next_sequence
+          @sequence = (@sequence + 1) & 0xFFFF
+        end
+
+        def pack_property_data(data, format)
+          request_encoder.pack_property_data(data, format)
+        end
+
+        def pad_to_4(str)
+          request_encoder.pad_to_4(str)
         end
       end
     end

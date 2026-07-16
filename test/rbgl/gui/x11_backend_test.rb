@@ -3,6 +3,7 @@
 require_relative "../../test_helper"
 require "rbgl/gui/x11/backend"
 require "rbgl/gui/x11/connection"
+require "tempfile"
 
 class X11ConnectionTest < Test::Unit::TestCase
   class FakeSocket
@@ -12,6 +13,7 @@ class X11ConnectionTest < Test::Unit::TestCase
       @reads = reads.flatten
       @writes = []
       @flush_count = 0
+      @closed = false
     end
 
     def write(data)
@@ -25,6 +27,29 @@ class X11ConnectionTest < Test::Unit::TestCase
 
     def read(_length)
       @reads.shift
+    end
+
+    def wait_readable(_timeout = nil)
+      !@reads.empty?
+    end
+
+    def read_nonblock(length, exception: false)
+      return :wait_readable if @reads.empty? && !exception
+
+      chunk = @reads.shift
+      return nil if chunk.nil?
+      return chunk if chunk.bytesize <= length
+
+      @reads.unshift(chunk.byteslice(length..))
+      chunk.byteslice(0, length)
+    end
+
+    def closed?
+      @closed
+    end
+
+    def close
+      @closed = true
     end
   end
 
@@ -40,6 +65,7 @@ class X11ConnectionTest < Test::Unit::TestCase
     end
     connection.define_singleton_method(:send_request) do |opcode, data, extra = 0|
       sent = [opcode, data, extra]
+      0
     end
 
     connection.change_property(10, :wm_protocols, :atom, [77], format: 32)
@@ -109,7 +135,7 @@ class X11ConnectionTest < Test::Unit::TestCase
     writer.flush
     assert_equal 1, connection.pending
 
-    reader.read_nonblock(1)
+    connection.send(:transport).read_exact(1)
     assert_equal 0, connection.pending
   ensure
     reader&.close unless reader&.closed?
@@ -121,6 +147,7 @@ class X11ConnectionTest < Test::Unit::TestCase
     sent = nil
     connection.define_singleton_method(:send_request) do |opcode, data, extra = 0|
       sent = [opcode, data, extra]
+      0
     end
 
     connection.create_window(
@@ -217,6 +244,7 @@ class X11ConnectionTest < Test::Unit::TestCase
     sent = nil
     connection.define_singleton_method(:send_request) do |opcode, data, extra = 0|
       sent = [opcode, data, extra]
+      0
     end
 
     atom = connection.intern_atom("WM_PROTOCOLS", only_if_exists: true)
@@ -234,14 +262,12 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal({ type: :queued }, connection.next_event)
 
     connection.instance_variable_set(:@pending_events, [])
-    connection.define_singleton_method(:pending) do
-      @pending_calls ||= 0
-      @pending_calls += 1
-      @pending_calls == 1 ? 1 : 0
-    end
-    connection.define_singleton_method(:read_event) { { type: :socket } }
+    payload = "\x00" * 32
+    payload.setbyte(0, 12)
+    connection.instance_variable_set(:@socket, FakeSocket.new(payload))
+    connection.instance_variable_set(:@transport, nil)
 
-    assert_equal({ type: :socket }, connection.next_event)
+    assert_equal({ type: :exposure }, connection.next_event)
   end
 
   test "parse_display_name accepts unix and tcp formats and rejects invalid names" do
@@ -262,6 +288,61 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_raise(RBGL::GUI::BackendUnavailable) do
       connection.send(:handshake)
     end
+
+    assert_equal 12, socket.writes.first.bytesize
+  end
+
+  test "handshake includes a matching MIT magic cookie" do
+    cookie = "0123456789abcdef"
+    authority = Tempfile.new("rbgl-xauthority")
+    authority.binmode
+    authority.write(
+      [RBGL::GUI::X11::XAuthority::FAMILY_LOCAL].pack("n") +
+      xauthority_field(Socket.gethostname) +
+      xauthority_field("0") +
+      xauthority_field(RBGL::GUI::X11::XAuthority::AUTH_NAME) +
+      xauthority_field(cookie)
+    )
+    authority.flush
+    socket = FakeSocket.new("\x00" * 8)
+    connection = build_connection(socket: socket)
+
+    assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.send(
+        :handshake,
+        host: nil,
+        display_num: 0,
+        env: { "XAUTHORITY" => authority.path }
+      )
+    end
+
+    setup = socket.writes.first
+    _order, _padding, major, minor, name_length, data_length, = setup.unpack("CCvvvvv")
+    name_offset = 12
+    data_offset = name_offset + ((name_length + 3) / 4) * 4
+    assert_equal 11, major
+    assert_equal 0, minor
+    assert_equal RBGL::GUI::X11::XAuthority::AUTH_NAME, setup.byteslice(name_offset, name_length)
+    assert_equal cookie, setup.byteslice(data_offset, data_length)
+  ensure
+    authority&.close!
+  end
+
+  test "Xauthority retries entries safely when the file is malformed" do
+    authority = Tempfile.new("rbgl-bad-xauthority")
+    authority.binmode
+    authority.write("\x00")
+    authority.flush
+
+    cookie = RBGL::GUI::X11::XAuthority.cookie_for(
+      host: nil,
+      display_number: 0,
+      env: { "XAUTHORITY" => authority.path }
+    )
+
+    assert_nil cookie
+  ensure
+    authority&.close!
   end
 
   test "parse_server_info extracts root screen metadata" do
@@ -310,6 +391,55 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal "data", reply[-4, 4]
   end
 
+  test "read_reply queues events that arrive before the expected reply" do
+    event = "\x00" * 32
+    event.setbyte(0, 12)
+    reply = "\x00" * 32
+    reply.setbyte(0, 1)
+    reply[2, 2] = [5].pack("v")
+    connection = build_connection(socket: FakeSocket.new(event, reply))
+
+    result = connection.send(:read_reply, 5)
+
+    assert_equal reply, result
+    assert_equal({ type: :exposure }, connection.next_event)
+  end
+
+  test "read_reply raises contextual X11 protocol errors" do
+    error_packet = "\x00" * 32
+    error_packet.setbyte(1, 3)
+    error_packet[2, 2] = [7].pack("v")
+    error_packet[4, 4] = [99].pack("V")
+    error_packet[8, 2] = [2].pack("v")
+    error_packet.setbyte(10, 16)
+    connection = build_connection(socket: FakeSocket.new(error_packet))
+
+    error = assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.send(:read_reply, 7)
+    end
+
+    assert_includes error.message, "request 7"
+    assert_includes error.message, "opcode 16.2"
+  end
+
+  test "transport buffers partial X11 packets" do
+    reader, writer = IO.pipe
+    transport = RBGL::GUI::X11::Transport.new(reader)
+
+    writer.write("hello")
+    writer.flush
+    assert_equal 1, transport.pending
+
+    writer.write("!!!")
+    writer.flush
+
+    assert_equal "hello!!!", transport.read_exact(8)
+    assert_equal 0, transport.pending
+  ensure
+    reader&.close unless reader&.closed?
+    writer&.close unless writer&.closed?
+  end
+
   test "read_event parses X11 event payloads" do
     connection = build_connection
 
@@ -339,6 +469,7 @@ class X11ConnectionTest < Test::Unit::TestCase
       payload[0, 1] = [type].pack("C")
       builder.call(payload)
       connection.instance_variable_set(:@socket, FakeSocket.new(payload))
+      connection.instance_variable_set(:@transport, nil)
 
       assert_equal expected, connection.send(:read_event)
     end
@@ -369,13 +500,28 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 3, interned.size
   end
 
+  test "atom cache does not retain failed zero resolutions" do
+    resolutions = [0, 77]
+    cache = RBGL::GUI::X11::AtomCache.new { resolutions.shift }
+
+    assert_equal 0, cache.fetch(:optional)
+    assert_equal 77, cache.fetch(:optional)
+    assert_equal 77, cache.fetch(:optional)
+  end
+
   private
 
   def build_connection(socket: FakeSocket.new)
     connection = RBGL::GUI::X11::Connection.allocate
     connection.instance_variable_set(:@socket, socket)
     connection.instance_variable_set(:@pending_events, [])
+    connection.instance_variable_set(:@pending_replies, {})
+    connection.instance_variable_set(:@sequence, 0)
     connection
+  end
+
+  def xauthority_field(value)
+    [value.bytesize].pack("n") + value
   end
 end
 
@@ -474,6 +620,10 @@ class X11BackendTest < Test::Unit::TestCase
 
     def destroy_window(window)
       @destroy_window_calls << window
+    end
+
+    def close
+      @closed = true
     end
 
     def wm_delete_window_atom
