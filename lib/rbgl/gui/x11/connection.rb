@@ -4,6 +4,7 @@ require "socket"
 require_relative "../backend"
 require_relative "atom_cache"
 require_relative "event_parser"
+require_relative "key_mapper"
 require_relative "request_encoder"
 require_relative "setup_parser"
 require_relative "transport"
@@ -66,6 +67,13 @@ module RBGL
 
         def enable_wm_delete_window(window)
           change_property(window, :wm_protocols, :atom, [wm_delete_window_atom], format: 32)
+        end
+
+        def key_for_keycode(keycode)
+          load_keyboard_mapping unless @keyboard_mapping
+          keysyms = @keyboard_mapping[keycode]
+          keysym = keysyms&.find { |candidate| !candidate.zero? }
+          KeyMapper.key(keysym, fallback: keycode)
         end
 
         def pending
@@ -234,6 +242,8 @@ module RBGL
           @resource_id_base = setup.resource_id_base
           @resource_id_mask = setup.resource_id_mask
           @maximum_request_length = setup.maximum_request_length
+          @minimum_keycode = setup.minimum_keycode
+          @maximum_keycode = setup.maximum_keycode
           @root = screen.root
           @root_depth = screen.root_depth
           @root_visual = screen.root_visual
@@ -272,6 +282,22 @@ module RBGL
             data: data
           )
           send_request_with_data(72, format_byte, header, image_data)
+        end
+
+        def load_keyboard_mapping
+          count = @maximum_keycode - @minimum_keycode + 1
+          request = [@minimum_keycode, count, 0].pack("CCv")
+          sequence = send_request(101, request)
+          flush
+          reply = read_reply(sequence)
+          keysyms_per_keycode = reply.getbyte(1)
+          keysyms = reply.byteslice(32..).unpack("V*")
+          @keyboard_mapping = {}
+
+          count.times do |index|
+            offset = index * keysyms_per_keycode
+            @keyboard_mapping[@minimum_keycode + index] = keysyms.slice(offset, keysyms_per_keycode)
+          end
         end
 
         def read_reply(expected_sequence = nil)

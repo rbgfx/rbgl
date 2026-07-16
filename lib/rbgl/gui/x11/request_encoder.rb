@@ -52,7 +52,7 @@ module RBGL
             x, y,
             width, height,
             border_width,
-            WINDOW_CLASSES.fetch(window_class, 0),
+            WINDOW_CLASSES.fetch(window_class),
             visual,
             mask
           ].pack("VVs<s<vvvvVV") + value_list.pack("V*")
@@ -78,7 +78,7 @@ module RBGL
         end
 
         def put_image_data(format:, drawable:, gc:, width:, height:, dst_x:, dst_y:, depth:, data:)
-          format_byte = IMAGE_FORMATS.fetch(format, IMAGE_FORMATS[:z_pixmap])
+          format_byte = IMAGE_FORMATS.fetch(format)
           header = [
             drawable,
             gc,
@@ -101,7 +101,7 @@ module RBGL
             value_count
           ].pack("VVVCV") + "\x00\x00\x00" + pad_to_4(data_bytes)
 
-          [PROPERTY_MODES.fetch(mode, 0), request]
+          [PROPERTY_MODES.fetch(mode), request]
         end
 
         def intern_atom_data(name)

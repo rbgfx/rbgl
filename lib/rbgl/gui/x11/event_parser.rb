@@ -19,7 +19,7 @@ module RBGL
           when 5
             button_event(:button_release, data)
           when 6
-            x, y = data[24, 4].unpack("ss")
+            x, y = data[24, 4].unpack("s<s<")
             { type: :motion_notify, x: x, y: y }
           when 12
             { type: :exposure }
@@ -46,7 +46,7 @@ module RBGL
         end
 
         def button_event(type, data)
-          x, y = data[24, 4].unpack("ss")
+          x, y = data[24, 4].unpack("s<s<")
           {
             type: type,
             x: x,

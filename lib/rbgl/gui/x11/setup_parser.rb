@@ -8,6 +8,8 @@ module RBGL
           :resource_id_base,
           :resource_id_mask,
           :maximum_request_length,
+          :minimum_keycode,
+          :maximum_keycode,
           :pixmap_formats,
           :screens,
           keyword_init: true
@@ -38,6 +40,8 @@ module RBGL
             resource_id_base: data.byteslice(4, 4).unpack1("V"),
             resource_id_mask: data.byteslice(8, 4).unpack1("V"),
             maximum_request_length: data.byteslice(18, 2).unpack1("v"),
+            minimum_keycode: data.getbyte(26),
+            maximum_keycode: data.getbyte(27),
             pixmap_formats: formats,
             screens: screens
           )

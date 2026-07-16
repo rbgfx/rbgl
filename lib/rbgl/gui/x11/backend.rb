@@ -128,9 +128,9 @@ module RBGL
         def convert_event(raw)
           case raw[:type]
           when :key_press
-            Event.new(:key_press, key: raw[:keycode])
+            Event.new(:key_press, key: @display.key_for_keycode(raw[:keycode]), keycode: raw[:keycode])
           when :key_release
-            Event.new(:key_release, key: raw[:keycode])
+            Event.new(:key_release, key: @display.key_for_keycode(raw[:keycode]), keycode: raw[:keycode])
           when :button_press
             Event.new(:mouse_press, x: raw[:x], y: raw[:y], button: raw[:button])
           when :button_release

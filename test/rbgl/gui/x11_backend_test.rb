@@ -219,7 +219,7 @@ class X11ConnectionTest < Test::Unit::TestCase
       sent << [opcode, extra, header_data, bulk_data]
     end
 
-    { bitmap: 0, xy_pixmap: 1, z_pixmap: 2, other: 2 }.each do |format, expected_extra|
+    { bitmap: 0, xy_pixmap: 1, z_pixmap: 2 }.each do |format, expected_extra|
       connection.put_image(
         format: format,
         drawable: 1,
@@ -238,6 +238,22 @@ class X11ConnectionTest < Test::Unit::TestCase
       assert_equal expected_extra, extra
       assert_equal "pixels", bulk_data
       assert_equal 20, header_data.bytesize
+    end
+
+
+    assert_raise(KeyError) do
+      connection.put_image(
+        format: :other,
+        drawable: 1,
+        gc: 2,
+        width: 1,
+        height: 1,
+        dst_x: 0,
+        dst_y: 0,
+        depth: 24,
+        data: "xxxx",
+        bytes_per_line: 4
+      )
     end
   end
 
@@ -609,6 +625,31 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 77, cache.fetch(:optional)
   end
 
+  test "key_for_keycode loads and caches the server keyboard mapping" do
+    reply = "\x00" * 48
+    reply.setbyte(0, 1)
+    reply.setbyte(1, 2)
+    reply[2, 2] = [1].pack("v")
+    reply[4, 4] = [4].pack("V")
+    reply[32, 16] = [0xFF1B, 0, 0x61, 0x41].pack("V4")
+    socket = FakeSocket.new(reply)
+    connection = build_connection(socket: socket)
+    connection.instance_variable_set(:@minimum_keycode, 8)
+    connection.instance_variable_set(:@maximum_keycode, 9)
+
+    assert_equal :escape, connection.key_for_keycode(8)
+    assert_equal :a, connection.key_for_keycode(9)
+    assert_equal 1, socket.writes.size
+    assert_equal 101, socket.writes.first.getbyte(0)
+  end
+
+  test "key mapper normalizes common keysyms and preserves unknown codes" do
+    assert_equal :left, RBGL::GUI::X11::KeyMapper.key(0xFF51, fallback: 113)
+    assert_equal :one, RBGL::GUI::X11::KeyMapper.key(0x31, fallback: 10)
+    assert_equal :a, RBGL::GUI::X11::KeyMapper.key(0x41, fallback: 38)
+    assert_equal 200, RBGL::GUI::X11::KeyMapper.key(0, fallback: 200)
+  end
+
   test "pixel encoder uses visual masks and scanline padding" do
     framebuffer = RBGL::Engine::Framebuffer.new(1, 1)
     framebuffer.set_pixel(0, 0, Larb::Color.red)
@@ -661,6 +702,8 @@ class X11ConnectionTest < Test::Unit::TestCase
     data[18, 2] = [65_535].pack("v")
     data.setbyte(20, 1)
     data.setbyte(21, 1)
+    data.setbyte(26, 8)
+    data.setbyte(27, 9)
     data[32, 8] = [24, 32, 32, 0, 0].pack("CCCCV")
     data[40, 4] = [10].pack("V")
     data[48, 4] = [0xFFFFFF].pack("V")
@@ -804,6 +847,10 @@ class X11BackendTest < Test::Unit::TestCase
     def wm_protocols_atom
       68
     end
+
+    def key_for_keycode(keycode)
+      { 65 => :escape, 66 => :a }.fetch(keycode, keycode)
+    end
   end
 
   test "setup_window registers WM_DELETE_WINDOW protocol" do
@@ -850,6 +897,8 @@ class X11BackendTest < Test::Unit::TestCase
     events = backend.poll_events
 
     assert_equal [:key_press, :mouse_press, :mouse_move, :resize], events.map(&:type)
+    assert_equal :escape, events.first.key
+    assert_equal 65, events.first.keycode
   end
 
   test "close destroys the current window and clears the handle" do
@@ -879,6 +928,8 @@ class X11BackendTest < Test::Unit::TestCase
     ]
 
     assert_equal [:key_press, :key_release, :mouse_press, :mouse_release, :mouse_move, :resize], events.map(&:type)
+    assert_equal :escape, events[0].key
+    assert_equal :a, events[1].key
   end
 
   test "convert_event closes only matching wm delete messages" do
