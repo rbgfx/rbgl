@@ -4,9 +4,9 @@ module RBGL
   module GUI
     module Wayland
       class Shm < WaylandObject
-        def create_pool(fd, size)
+        def create_pool(file, size)
           pool_id = @connection.allocate_id
-          @connection.send_request_with_fd(@id, 0, Arguments.new_id(pool_id), Arguments.int(size), fd)
+          @connection.send_request_with_fd(@id, 0, Arguments.new_id(pool_id), Arguments.int(size), file)
           @connection.register_object(ShmPool.new(@connection, pool_id))
         end
       end
@@ -67,10 +67,10 @@ module RBGL
           finalize_destroy if @destroy_requested
         end
 
-        def destroy
+        def destroy(force: false)
           return if @destroyed || @destroy_requested
 
-          if @busy
+          if @busy && !force
             @destroy_requested = true
           else
             finalize_destroy
@@ -119,12 +119,12 @@ module RBGL
           @wl_buffer.id
         end
 
-        def destroy
+        def destroy(force: false)
           return if @destroyed
 
           @destroy_requested = true
-          @wl_buffer.destroy
-          finalize_destroy unless @wl_buffer.busy?
+          force ? @wl_buffer.destroy(force: true) : @wl_buffer.destroy
+          finalize_destroy if force || !@wl_buffer.busy?
         end
 
         private

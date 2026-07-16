@@ -8,16 +8,11 @@ module RBGL
           result = String.new
 
           args.each do |arg|
-            case arg
-            when TypedArgument
-              result << pack_typed_argument(arg)
-            when Integer
-              result << [arg].pack("V")
-            when String
-              result << pack_string(arg)
-            when Float
-              result << [(arg * 256).to_i].pack("V")
+            unless arg.is_a?(TypedArgument)
+              raise ArgumentError, "Wayland requests require typed arguments"
             end
+
+            result << pack_typed_argument(arg)
           end
 
           result

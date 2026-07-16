@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "connection"
+require "tempfile"
 
 module RBGL
   module GUI
@@ -14,6 +15,9 @@ module RBGL
           @connection = Connection.new(env: env, roundtrip_timeout: roundtrip_timeout)
           @windows = {}
           setup_window(width, height, title)
+        rescue StandardError
+          @connection&.close
+          raise
         end
 
         private def setup_window(w, h, t)
@@ -22,27 +26,26 @@ module RBGL
           toplevel = xdg_surface.get_toplevel
           toplevel.set_title(t)
 
-          buffers = create_shm_buffers(w, h)
-          shm_buffer = buffers.first
-
-          surface.attach(shm_buffer, 0, 0)
-          shm_buffer.mark_in_use
-          surface.commit
-          @connection.flush
-
           handle = surface.id
           @windows[handle] = {
             surface: surface,
             xdg_surface: xdg_surface,
             toplevel: toplevel,
-            buffers: buffers,
-            shm_buffer: shm_buffer,
+            buffers: [],
+            shm_buffer: nil,
             width: w,
             height: h,
             should_close: false
           }
 
           @handle = handle
+          surface.commit
+          @connection.flush
+          wait_for_initial_configure(xdg_surface)
+
+          buffers = create_shm_buffers(w, h)
+          @windows[handle][:buffers] = buffers
+          @windows[handle][:shm_buffer] = buffers.first
         end
 
         def present(framebuffer)
@@ -103,9 +106,11 @@ module RBGL
           window[:toplevel].destroy
           window[:xdg_surface].destroy
           window[:surface].destroy
-          window.fetch(:buffers, [window[:shm_buffer]].compact).each(&:destroy)
+          window.fetch(:buffers, [window[:shm_buffer]].compact).each { |buffer| buffer.destroy(force: true) }
+          @connection.flush
           @windows.delete(@handle)
           @handle = nil
+          @connection.close
         end
 
         private
@@ -181,25 +186,26 @@ module RBGL
           size = width * height * 4
 
           file = create_anonymous_file(size)
-          pool = @connection.shm.create_pool(file.fileno, size)
+          pool = @connection.shm.create_pool(file, size)
           buffer = pool.create_buffer(0, width, height, width * 4, :argb8888)
 
           ShmBuffer.new(file, pool, buffer)
         end
 
         def create_anonymous_file(size)
-          name = "rbgl-#{Process.pid}-#{rand(10000)}"
-          path = "/dev/shm/#{name}"
-
-          file = File.open(path, File::RDWR | File::CREAT | File::EXCL, 0o600)
+          file = Tempfile.new("rbgl-wayland")
+          file.binmode
+          file.chmod(0o600)
           file.truncate(size)
-          File.unlink(path)
+          file.unlink
           file
-        rescue Errno::ENOENT
-          require "tempfile"
-          tmpfile = Tempfile.new("rbgl")
-          tmpfile.truncate(size)
-          tmpfile
+        end
+
+        def wait_for_initial_configure(xdg_surface)
+          configured = @connection.wait_until { xdg_surface.configured? }
+          return if configured
+
+          raise GUI::BackendUnavailable, "Wayland compositor did not configure the surface"
         end
 
       end

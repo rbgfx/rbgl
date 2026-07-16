@@ -16,6 +16,15 @@ module RBGL
       end
 
       class XdgSurface < WaylandObject
+        def initialize(connection, id)
+          super
+          @configured = false
+        end
+
+        def configured?
+          @configured
+        end
+
         def get_toplevel
           toplevel_id = @connection.allocate_id
           send_request(1, Arguments.new_id(toplevel_id))
@@ -24,6 +33,12 @@ module RBGL
 
         def ack_configure(serial)
           send_request(4, Arguments.uint(serial))
+        end
+
+        def handle_configure(serial)
+          ack_configure(serial)
+          @connection.flush
+          @configured = true
         end
 
         def destroy

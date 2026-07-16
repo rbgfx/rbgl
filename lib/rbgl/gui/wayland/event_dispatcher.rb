@@ -13,6 +13,8 @@ module RBGL
           object = @connection.object_for(object_id)
 
           case object
+          when Display
+            handle_display_event(opcode, payload)
           when Registry
             handle_registry_event(opcode, payload)
           when Callback
@@ -22,13 +24,25 @@ module RBGL
           when XdgWmBase
             handle_xdg_wm_base_event(object, opcode, payload)
           when XdgSurface
-            handle_xdg_surface_event(object, opcode, payload)
+            object.handle_configure(payload.unpack1("V")) if opcode == 0
           when XdgToplevel
             handle_xdg_toplevel_event(object_id, opcode, payload)
           end
         end
 
         private
+
+        def handle_display_event(opcode, payload)
+          case opcode
+          when 0
+            failed_object, code, length = payload.byteslice(0, 12).unpack("VVV")
+            message = payload.byteslice(12, length - 1)
+            raise GUI::BackendUnavailable,
+                  "Wayland protocol error #{code} on object #{failed_object}: #{message}"
+          when 1
+            @connection.unregister_object(payload.unpack1("V"))
+          end
+        end
 
         def handle_registry_event(opcode, payload)
           return unless opcode == 0
@@ -44,13 +58,6 @@ module RBGL
           return unless opcode == 0
 
           object.pong(payload.unpack1("V"))
-          @connection.flush
-        end
-
-        def handle_xdg_surface_event(object, opcode, payload)
-          return unless opcode == 0
-
-          object.ack_configure(payload.unpack1("V"))
           @connection.flush
         end
 

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "socket"
+require "io/wait"
 require_relative "protocol_objects"
 require_relative "codec"
 require_relative "event_dispatcher"
@@ -12,6 +13,7 @@ module RBGL
       class Connection
         DEFAULT_ROUNDTRIP_TIMEOUT = 1.0
         ROUNDTRIP_POLL_INTERVAL = 0.01
+        READ_CHUNK_SIZE = 16_384
 
         attr_reader :compositor, :shm, :xdg_wm_base, :registry, :globals
 
@@ -23,6 +25,8 @@ module RBGL
           @next_id = 2
           @globals = {}
           @pending_events = []
+          @read_buffer = String.new(encoding: Encoding::BINARY)
+          @closed = false
 
           @display = Display.new(self)
           register_object(@display)
@@ -49,6 +53,10 @@ module RBGL
           @objects[object_id]
         end
 
+        def unregister_object(object_id)
+          @objects.delete(object_id)
+        end
+
         def store_global(interface, name:, version:)
           @globals[interface] = { name: name, version: version }
         end
@@ -64,10 +72,15 @@ module RBGL
         end
 
         def send_request_with_fd(object_id, opcode, *args, fd)
+          io = fd.respond_to?(:to_io) ? fd.to_io : fd
+          unless io.is_a?(IO)
+            raise ArgumentError, "Wayland file descriptor arguments must be IO objects"
+          end
+
           payload = pack_args(args)
           header = [object_id, (payload.bytesize + 8) << 16 | opcode].pack("VV")
 
-          @socket.sendmsg(header + payload, 0, nil, Socket::AncillaryData.unix_rights(fd))
+          @socket.sendmsg(header + payload, 0, nil, Socket::AncillaryData.unix_rights(io))
         end
 
         def flush
@@ -83,21 +96,10 @@ module RBGL
         end
 
         def pump_events(timeout: nil)
-          ready = IO.select([@socket], nil, nil, timeout)
-          return 0 unless ready
-
-          loop do
-            header = @socket.read(8)
-            break unless header && header.bytesize == 8
-
-            object_id, size_and_opcode = header.unpack("VV")
-            size = size_and_opcode >> 16
-            opcode = size_and_opcode & 0xFFFF
-            payload = size > 8 ? @socket.read(size - 8) : ""
-
-            handle_event(object_id, opcode, payload)
-            break unless IO.select([@socket], nil, nil, 0)
-          end
+          read_from_socket(timeout) unless complete_message?
+          drain_messages
+          read_from_socket(0) if @socket.wait_readable(0)
+          drain_messages
 
           @pending_events.length
         end
@@ -113,6 +115,29 @@ module RBGL
 
             pump_events(timeout: roundtrip_poll_interval(deadline))
           end
+        end
+
+        def wait_until(timeout: @roundtrip_timeout)
+          deadline = monotonic_time + timeout
+
+          until yield
+            return false if monotonic_time >= deadline
+
+            pump_events(timeout: roundtrip_poll_interval(deadline))
+          end
+
+          true
+        end
+
+        def close
+          return if @closed
+
+          @socket.close unless @socket.closed?
+          @closed = true
+        end
+
+        def closed?
+          @closed || @socket.closed?
         end
 
         private
@@ -135,6 +160,40 @@ module RBGL
 
         def handle_event(object_id, opcode, payload)
           event_dispatcher.handle_event(object_id, opcode, payload)
+        end
+
+        def complete_message?
+          return false if @read_buffer.bytesize < 8
+
+          size = @read_buffer.byteslice(4, 4).unpack1("V") >> 16
+          raise GUI::BackendUnavailable, "Invalid Wayland message size: #{size}" if size < 8
+
+          @read_buffer.bytesize >= size
+        end
+
+        def drain_messages
+          while complete_message?
+            object_id, size_and_opcode = @read_buffer.byteslice(0, 8).unpack("VV")
+            size = size_and_opcode >> 16
+            opcode = size_and_opcode & 0xFFFF
+            message = @read_buffer.slice!(0, size)
+            handle_event(object_id, opcode, message.byteslice(8, size - 8))
+          end
+        end
+
+        def read_from_socket(timeout)
+          return false unless @socket.wait_readable(timeout)
+
+          read_any = false
+          loop do
+            chunk = @socket.read_nonblock(READ_CHUNK_SIZE, exception: false)
+            break if chunk == :wait_readable
+            raise GUI::BackendUnavailable, "Wayland compositor closed the connection" if chunk.nil?
+
+            @read_buffer << chunk
+            read_any = true
+          end
+          read_any
         end
 
         def bind_globals

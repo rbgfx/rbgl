@@ -3,6 +3,7 @@
 require_relative "../../test_helper"
 require "rbgl/gui/wayland/backend"
 require "rbgl/gui/wayland/connection"
+require "socket"
 require "tempfile"
 
 class WaylandProtocolObjectsTest < Test::Unit::TestCase
@@ -64,7 +65,8 @@ class WaylandProtocolObjectsTest < Test::Unit::TestCase
 
     bound_id = registry.bind(1, "wl_compositor", 4)
     surface = compositor.create_surface
-    pool = shm.create_pool(9, 64)
+    file = Tempfile.new("rbgl-wayland-fd")
+    pool = shm.create_pool(file, 64)
     xdg_surface = xdg_wm_base.get_xdg_surface(surface)
     toplevel = xdg_surface.get_toplevel
 
@@ -84,7 +86,7 @@ class WaylandProtocolObjectsTest < Test::Unit::TestCase
     assert_equal 23, pool.id
     assert_equal 24, xdg_surface.id
     assert_equal 25, toplevel.id
-    assert_equal [4, 0, [[:new_id, 23], [:int, 64]], 9], connection.fd_requests.first
+    assert_equal [4, 0, [[:new_id, 23], [:int, 64]], file], connection.fd_requests.first
     assert_equal [
       [2, 0, [[:uint, 1], [:string, "wl_compositor"], [:uint, 4], [:new_id, 21]]],
       [3, 0, [[:new_id, 22]]],
@@ -102,6 +104,8 @@ class WaylandProtocolObjectsTest < Test::Unit::TestCase
       [25, 0, []],
       [23, 1, []]
     ], connection.requests
+  ensure
+    file&.close!
   end
 
   test "callback tracks done state" do
@@ -200,7 +204,7 @@ class WaylandConnectionTest < Test::Unit::TestCase
     connection = RBGL::GUI::Wayland::Connection.allocate
     registry = RBGL::GUI::Wayland::Registry.allocate
     xdg_wm_base = RBGL::GUI::Wayland::XdgWmBase.allocate
-    xdg_surface = RBGL::GUI::Wayland::XdgSurface.allocate
+    xdg_surface = RBGL::GUI::Wayland::XdgSurface.new(connection, 9)
 
     connection.instance_variable_set(:@objects, {
       7 => registry,
@@ -227,6 +231,7 @@ class WaylandConnectionTest < Test::Unit::TestCase
     assert_equal [99], pong_serials
     assert_equal [101], configure_serials
     assert_equal 2, flush_count
+    assert_true xdg_surface.configured?
   end
 
   test "handle_event queues toplevel configure events" do
@@ -278,6 +283,113 @@ class WaylandConnectionTest < Test::Unit::TestCase
     ].join
 
     assert_equal expected, packed
+  end
+
+  test "pack_args rejects untyped protocol arguments" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+
+    assert_raise(ArgumentError) { connection.send(:pack_args, [1]) }
+  end
+
+  test "send_request_with_fd sends an IO descriptor" do
+    sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
+    file = Tempfile.new("rbgl-wayland-rights")
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    connection.instance_variable_set(:@socket, sender)
+
+    connection.send_request_with_fd(
+      4,
+      0,
+      RBGL::GUI::Wayland::Arguments.new_id(5),
+      RBGL::GUI::Wayland::Arguments.int(16),
+      file
+    )
+
+    message = receiver.recvmsg(scm_rights: true)
+    received_files = message.drop(3).flat_map(&:unix_rights)
+
+    assert_equal 16, message.first.bytesize
+    assert_equal 1, received_files.size
+  ensure
+    received_files&.compact&.each(&:close)
+    file&.close!
+    sender&.close
+    receiver&.close
+  end
+
+  test "send_request_with_fd rejects integer descriptors" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+
+    assert_raise(ArgumentError) do
+      connection.send_request_with_fd(4, 0, 9)
+    end
+  end
+
+  test "pump_events buffers partial protocol messages" do
+    sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    toplevel = RBGL::GUI::Wayland::XdgToplevel.allocate
+    payload = [320, 200].pack("l<l<")
+    message = [12, ((payload.bytesize + 8) << 16)].pack("VV") + payload
+
+    connection.instance_variable_set(:@socket, receiver)
+    connection.instance_variable_set(:@objects, { 12 => toplevel })
+    connection.instance_variable_set(:@pending_events, [])
+    connection.instance_variable_set(:@read_buffer, String.new(encoding: Encoding::BINARY))
+
+    sender.write(message.byteslice(0, 5))
+    connection.pump_events(timeout: 0.01)
+    assert_empty connection.dispatch_pending
+
+    sender.write(message.byteslice(5..))
+    connection.pump_events(timeout: 0.01)
+
+    assert_equal [
+      { type: :xdg_toplevel_configure, object_id: 12, width: 320, height: 200 }
+    ], connection.dispatch_pending
+  ensure
+    sender&.close
+    receiver&.close
+  end
+
+  test "display delete_id removes released protocol objects" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    display = RBGL::GUI::Wayland::Display.new(connection)
+    released = Object.new
+    connection.instance_variable_set(:@objects, { 1 => display, 42 => released })
+
+    connection.send(:handle_event, 1, 1, [42].pack("V"))
+
+    assert_nil connection.object_for(42)
+  end
+
+  test "display errors raise backend unavailable with protocol context" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    display = RBGL::GUI::Wayland::Display.new(connection)
+    message = "invalid surface"
+    payload = [7, 3, message.bytesize + 1].pack("VVV") + message + "\x00"
+    connection.instance_variable_set(:@objects, { 1 => display })
+
+    error = assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.send(:handle_event, 1, 0, payload)
+    end
+
+    assert_includes error.message, "object 7"
+    assert_includes error.message, message
+  end
+
+  test "close releases the Wayland socket once" do
+    socket = Object.new
+    closed = false
+    socket.define_singleton_method(:closed?) { closed }
+    socket.define_singleton_method(:close) { closed = true }
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    connection.instance_variable_set(:@socket, socket)
+    connection.instance_variable_set(:@closed, false)
+
+    2.times { connection.close }
+
+    assert_true connection.closed?
   end
 
   test "resolve_socket_path uses injected env values" do
@@ -380,16 +492,68 @@ class WaylandBackendTest < Test::Unit::TestCase
           toplevel: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { destroyed << :toplevel } },
           xdg_surface: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { destroyed << :xdg_surface } },
           surface: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { destroyed << :surface } },
-          shm_buffer: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { destroyed << :shm_buffer } },
+          shm_buffer: Object.new.tap { |obj| obj.define_singleton_method(:destroy) { |force: false| destroyed << [:shm_buffer, force] } },
           should_close: false
         }
       }
     )
+    connection = Object.new
+    connection.define_singleton_method(:flush) { destroyed << :flush }
+    connection.define_singleton_method(:close) { destroyed << :connection }
+    backend.instance_variable_set(:@connection, connection)
 
     backend.close
 
-    assert_equal [:toplevel, :xdg_surface, :surface, :shm_buffer], destroyed
+    assert_equal [
+      :toplevel,
+      :xdg_surface,
+      :surface,
+      [:shm_buffer, true],
+      :flush,
+      :connection
+    ], destroyed
     assert_nil backend.instance_variable_get(:@handle)
+  end
+
+  test "setup commits an empty surface and waits for configure before allocating buffers" do
+    calls = []
+    surface = Object.new
+    surface.define_singleton_method(:id) { 10 }
+    surface.define_singleton_method(:commit) { calls << :empty_commit }
+    xdg_surface = Object.new
+    configured = false
+    xdg_surface.define_singleton_method(:get_toplevel) { @toplevel }
+    xdg_surface.define_singleton_method(:configured?) { configured }
+    toplevel = Object.new
+    toplevel.define_singleton_method(:set_title) { |_title| calls << :title }
+    xdg_surface.instance_variable_set(:@toplevel, toplevel)
+    compositor = Object.new
+    compositor.define_singleton_method(:create_surface) { surface }
+    wm_base = Object.new
+    wm_base.define_singleton_method(:get_xdg_surface) { |_surface| xdg_surface }
+    connection = Object.new
+    connection.define_singleton_method(:compositor) { compositor }
+    connection.define_singleton_method(:xdg_wm_base) { wm_base }
+    connection.define_singleton_method(:flush) { calls << :flush }
+    connection.define_singleton_method(:wait_until) do |&block|
+      calls << :wait_for_configure
+      configured = true
+      block.call
+    end
+    buffer = Object.new
+
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    backend.instance_variable_set(:@connection, connection)
+    backend.instance_variable_set(:@windows, {})
+    backend.define_singleton_method(:create_shm_buffers) do |_width, _height|
+      calls << :create_buffers
+      [buffer]
+    end
+
+    backend.send(:setup_window, 100, 80, "Test")
+
+    assert_equal [:title, :empty_commit, :flush, :wait_for_configure, :create_buffers], calls
+    assert_equal buffer, backend.instance_variable_get(:@windows)[10][:shm_buffer]
   end
 
   test "resize recreates shm buffer for the current window" do
@@ -578,7 +742,8 @@ class WaylandBackendTest < Test::Unit::TestCase
     wl_buffer.define_singleton_method(:destroy) { }
     pool.define_singleton_method(:create_buffer) { |_offset, _width, _height, _stride, _format| wl_buffer }
     shm = Object.new
-    shm.define_singleton_method(:create_pool) { |_fd, _size| pool }
+    received_file = nil
+    shm.define_singleton_method(:create_pool) { |file, _size| received_file = file; pool }
     connection = Object.new
     connection.define_singleton_method(:shm) { shm }
 
@@ -588,6 +753,7 @@ class WaylandBackendTest < Test::Unit::TestCase
     shm_buffer = backend.send(:create_shm_buffer, 2, 2)
 
     assert_equal wl_buffer, shm_buffer.wl_buffer
+    assert_same tempfile, received_file
   ensure
     tempfile.close!
   end
