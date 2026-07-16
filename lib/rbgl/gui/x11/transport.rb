@@ -44,7 +44,7 @@ module RBGL
         private
 
         def fill_buffer(length, timeout:)
-          deadline = timeout && monotonic_time + timeout
+          deadline = timeout && (monotonic_time + timeout)
 
           while @read_buffer.bytesize < length
             wait = deadline && [deadline - monotonic_time, 0].max

@@ -115,7 +115,7 @@ module RBGL
 
         case start_value
         when Numeric
-          start_value + (finish_value - start_value) * t
+          start_value + ((finish_value - start_value) * t)
         when Larb::Vec2, Larb::Vec3, Larb::Vec4, Larb::Color
           start_value.lerp(finish_value, t)
         else

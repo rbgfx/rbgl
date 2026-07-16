@@ -48,7 +48,7 @@ module RBGL
       def set_pixel(x, y, color)
         return if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @data[y.to_i * @width + x.to_i] = immutable_color(color)
+        @data[(y.to_i * @width) + x.to_i] = immutable_color(color)
         @mipmaps_dirty = true
       end
 
@@ -86,7 +86,7 @@ module RBGL
         height.times do |y|
           width.times do |x|
             checker = ((x / size) + (y / size)) % 2
-            data[y * width + x] = checker == 0 ? color1 : color2
+            data[(y * width) + x] = checker == 0 ? color1 : color2
           end
         end
         new(width, height, data)
@@ -252,7 +252,7 @@ module RBGL
         level_data = level.zero? ? @data : level_data(level)
         clamped_x = x.clamp(0, level_width - 1).to_i
         clamped_y = y.clamp(0, level_height - 1).to_i
-        level_data[clamped_y * level_width + clamped_x]
+        level_data[(clamped_y * level_width) + clamped_x]
       end
 
       def level_data(level)
@@ -302,7 +302,7 @@ module RBGL
           2.times do |dx|
             x = [start_x + dx, source_width - 1].min
             y = [start_y + dy, source_height - 1].min
-            samples << source_data[y * source_width + x]
+            samples << source_data[(y * source_width) + x]
           end
         end
 

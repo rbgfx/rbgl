@@ -76,14 +76,14 @@ module RBGL
               end
 
         Larb::Vec3.new(
-          (ndc.x + 1) * 0.5 * @viewport[:width] + @viewport[:x],
-          (1 - ndc.y) * 0.5 * @viewport[:height] + @viewport[:y],
+          ((ndc.x + 1) * 0.5 * @viewport[:width]) + @viewport[:x],
+          ((1 - ndc.y) * 0.5 * @viewport[:height]) + @viewport[:y],
           (ndc.z + 1) * 0.5
         )
       end
 
       def edge_function(a, b, c)
-        (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x)
+        ((c.x - a.x) * (b.y - a.y)) - ((c.y - a.y) * (b.x - a.x))
       end
 
       def state(cull_mode:, depth_test:, depth_write:, blend_mode:)

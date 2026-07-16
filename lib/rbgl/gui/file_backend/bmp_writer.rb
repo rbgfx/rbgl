@@ -17,7 +17,7 @@ module RBGL
         def encode(framebuffer)
           width = framebuffer.width
           height = framebuffer.height
-          row_size = ((24 * width + 31) / 32) * 4
+          row_size = (((24 * width) + 31) / 32) * 4
           pixel_data_size = row_size * height
           file_size = 54 + pixel_data_size
 
@@ -51,7 +51,7 @@ module RBGL
               bytes = framebuffer.get_pixel(x, y).to_bytes
               row << [bytes[2], bytes[1], bytes[0]].pack("CCC")
             end
-            row << "\x00" * (row_size - width * 3)
+            row << ("\x00" * (row_size - (width * 3)))
             pixels << row
           end
 

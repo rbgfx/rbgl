@@ -13,7 +13,7 @@ module RBGL
         def initialize(time_source: DEFAULT_TIME_SOURCE, sleeper: DEFAULT_SLEEPER, target_fps: 60)
           @time_source = time_source
           @sleeper = sleeper
-          @frame_interval = target_fps && 1.0 / validate_target_fps(target_fps)
+          @frame_interval = target_fps && (1.0 / validate_target_fps(target_fps))
           @fps = 0
           @dropped_frames = 0
           @running = false

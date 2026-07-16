@@ -10,3 +10,8 @@ Rake::TestTask.new(:test) do |t|
 end
 
 task default: :test
+
+desc "Run RuboCop correctness checks"
+task :lint do
+  sh "bundle exec rubocop --cache false --lint lib rbgl.gemspec Rakefile test/integration"
+end

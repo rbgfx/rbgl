@@ -56,7 +56,7 @@ module RBGL
                   corrected_w1 /= total
                   corrected_w2 /= total
                 end
-                depth = p0.z * corrected_w0 + p1.z * corrected_w1 + p2.z * corrected_w2
+                depth = (p0.z * corrected_w0) + (p1.z * corrected_w1) + (p2.z * corrected_w2)
                 @interpolator.interpolate_triangle(
                   interpolation_plan, corrected_w0, corrected_w1, corrected_w2, result: attributes
                 )
@@ -86,7 +86,7 @@ module RBGL
         end
 
         def edge_value(a, b, x, y)
-          (x - a.x) * (b.y - a.y) - (y - a.y) * (b.x - a.x)
+          ((x - a.x) * (b.y - a.y)) - ((y - a.y) * (b.x - a.x))
         end
 
         def inside_triangle?(w0, w1, w2, positive_area)

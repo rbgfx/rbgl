@@ -53,18 +53,17 @@ module RBGL
 
       def refract(v, n, eta)
         cos_i = -dot(n, v)
-        sin_t2 = eta * eta * (1.0 - cos_i * cos_i)
+        sin_t2 = eta * eta * (1.0 - (cos_i * cos_i))
         return vec3(0) if sin_t2 > 1.0
 
         cos_t = Math.sqrt(1.0 - sin_t2)
-        v * eta + n * (eta * cos_i - cos_t)
+        (v * eta) + (n * ((eta * cos_i) - cos_t))
       end
 
       def mix(a, b, t)
         case a
-        when Numeric then a + (b - a) * t
-        when Larb::Vec2, Larb::Vec3, Larb::Vec4 then a.lerp(b, t)
-        when Larb::Color then a.lerp(b, t)
+        when Numeric then a + ((b - a) * t)
+        when Larb::Vec2, Larb::Vec3, Larb::Vec4, Larb::Color then a.lerp(b, t)
         else
           raise ArgumentError, "Unsupported mix operand: #{a.class}"
         end
@@ -88,7 +87,7 @@ module RBGL
           next value < e0 ? 0.0 : 1.0 if e0 == e1
 
           t = ((value - e0) / (e1 - e0)).clamp(0.0, 1.0)
-          t * t * (3.0 - 2.0 * t)
+          t * t * (3.0 - (2.0 * t))
         end
       end
 
@@ -101,7 +100,7 @@ module RBGL
       end
 
       def mod(x, y)
-        component_binary_map(x, y) { |left, right| left - right * (left / right).floor }
+        component_binary_map(x, y) { |left, right| left - (right * (left / right).floor) }
       end
 
       def abs(x)

@@ -67,7 +67,7 @@ module RBGL
 
         def send_request(object_id, opcode, *args)
           payload = pack_args(args)
-          header = [object_id, (payload.bytesize + 8) << 16 | opcode].pack("VV")
+          header = [object_id, ((payload.bytesize + 8) << 16) | opcode].pack("VV")
           @socket.write(header + payload)
         end
 
@@ -78,7 +78,7 @@ module RBGL
           end
 
           payload = pack_args(args)
-          header = [object_id, (payload.bytesize + 8) << 16 | opcode].pack("VV")
+          header = [object_id, ((payload.bytesize + 8) << 16) | opcode].pack("VV")
 
           @socket.sendmsg(header + payload, 0, nil, Socket::AncillaryData.unix_rights(io))
         end

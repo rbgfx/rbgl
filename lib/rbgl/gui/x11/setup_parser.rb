@@ -34,7 +34,7 @@ module RBGL
           format_count = data.getbyte(21)
           format_offset = 32 + padded_length(vendor_length)
           formats = parse_formats(data, format_offset, format_count)
-          screens = parse_screens(data, format_offset + format_count * 8, screen_count)
+          screens = parse_screens(data, format_offset + (format_count * 8), screen_count)
 
           Setup.new(
             resource_id_base: data.byteslice(4, 4).unpack1("V"),
@@ -51,7 +51,7 @@ module RBGL
 
         def parse_formats(data, offset, count)
           count.times.map do |index|
-            bytes = required_slice(data, offset + index * 8, 8)
+            bytes = required_slice(data, offset + (index * 8), 8)
             PixmapFormat.new(
               depth: bytes.getbyte(0),
               bits_per_pixel: bytes.getbyte(1),

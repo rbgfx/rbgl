@@ -41,7 +41,7 @@ module RBGL
 
         def pack_string(value)
           length = value.bytesize + 1
-          [length].pack("V") + value + "\x00" + ("\x00" * ((4 - length % 4) % 4))
+          [length].pack("V") + value + "\x00" + ("\x00" * ((4 - (length % 4)) % 4))
         end
       end
     end

@@ -133,7 +133,7 @@ module RBGL
         end
 
         def pad_to_4(str)
-          padding = (4 - str.bytesize % 4) % 4
+          padding = (4 - (str.bytesize % 4)) % 4
           str + ("\x00" * padding)
         end
 
@@ -144,7 +144,7 @@ module RBGL
           raise ArgumentError, "X11 request exceeds the 16-bit core protocol limit" if length > 65_535
 
           header = [opcode, extra, length].pack("CCv")
-          padding = "\x00" * (length * 4 - 4 - data.bytesize)
+          padding = "\x00" * ((length * 4) - 4 - data.bytesize)
           header + data + padding
         end
 

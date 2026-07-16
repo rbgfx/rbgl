@@ -120,7 +120,7 @@ module RBGL
         }
       end
 
-      def check_cocoa(env, platform)
+      def check_cocoa(_env, platform)
         darwin = platform.include?("darwin")
         return { platform: platform, supported: false } unless darwin
 

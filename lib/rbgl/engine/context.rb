@@ -46,7 +46,7 @@ module RBGL
 
       def draw_arrays(mode, first, count)
         validate_draw_state!
-        draw_vertices(mode, first...first + count)
+        draw_vertices(mode, first...(first + count))
       end
 
       def draw_elements(mode, count, offset = 0)
@@ -95,7 +95,7 @@ module RBGL
         when :points
           vertices.each { |vertex| yield [vertex] }
         when :triangle_strip
-          (0...vertices.size - 2).each do |index|
+          (0...(vertices.size - 2)).each do |index|
             if index.even?
               yield [vertices[index], vertices[index + 1], vertices[index + 2]]
             else
@@ -103,7 +103,7 @@ module RBGL
             end
           end
         when :triangle_fan
-          (1...vertices.size - 1).each do |index|
+          (1...(vertices.size - 1)).each do |index|
             yield [vertices[0], vertices[index], vertices[index + 1]]
           end
         else

@@ -113,7 +113,7 @@ module RBGL
         end
 
         def put_image(format:, drawable:, gc:, width:, height:, dst_x:, dst_y:, depth:, data:, bytes_per_line:)
-          maximum_data = @maximum_request_length * 4 - 24
+          maximum_data = (@maximum_request_length * 4) - 24
           if bytes_per_line > maximum_data
             raise GUI::BackendUnavailable, "An X11 image row exceeds the server request limit"
           end
@@ -186,7 +186,7 @@ module RBGL
         def parse_display_name(name)
           if name =~ /^(?:(.*):)?(\d+)(?:\.(\d+))?$/
             host = ::Regexp.last_match(1)
-            host = nil if host&.empty?
+            host = nil if host && host.empty?
             [host, ::Regexp.last_match(2).to_i, (::Regexp.last_match(3) || 0).to_i]
           else
             raise GUI::BackendUnavailable, "Invalid X11 display name: #{name}"

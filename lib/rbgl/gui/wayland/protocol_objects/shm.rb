@@ -17,7 +17,8 @@ module RBGL
           format_val = case format
                        when :argb8888 then 0
                        when :xrgb8888 then 1
-                       else 0
+                       else
+                         raise ArgumentError, "Unsupported Wayland SHM format: #{format}"
                        end
           send_request(
             0,

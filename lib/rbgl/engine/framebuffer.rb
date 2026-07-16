@@ -26,31 +26,31 @@ module RBGL
       def get_pixel(x, y)
         return nil if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @color_buffer[y * @width + x]
+        @color_buffer[(y * @width) + x]
       end
 
       def set_pixel(x, y, color)
         return if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @color_buffer[y * @width + x] = immutable_color(color)
+        @color_buffer[(y * @width) + x] = immutable_color(color)
       end
 
       def get_depth(x, y)
         return Float::INFINITY if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @depth_buffer[y * @width + x]
+        @depth_buffer[(y * @width) + x]
       end
 
       def set_depth(x, y, depth)
         return if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @depth_buffer[y * @width + x] = depth
+        @depth_buffer[(y * @width) + x] = depth
       end
 
       def write_pixel(x, y, color, depth, depth_test: true, depth_write: true, blend_mode: :none)
         return false if x < 0 || x >= @width || y < 0 || y >= @height
 
-        idx = y * @width + x
+        idx = (y * @width) + x
         return false if depth_test && depth >= @depth_buffer[idx]
 
         @color_buffer[idx] = immutable_color(blend_color(@color_buffer[idx], color, blend_mode))
@@ -76,7 +76,7 @@ module RBGL
         ppm << "P3\n#{@width} #{@height}\n255\n"
         @height.times do |y|
           @width.times do |x|
-            c = @color_buffer[y * @width + x]
+            c = @color_buffer[(y * @width) + x]
             ppm << " " unless x.zero?
             ppm << color_byte(c.r).to_s << " " << color_byte(c.g).to_s << " " << color_byte(c.b).to_s
           end
@@ -131,10 +131,10 @@ module RBGL
           alpha = source.a
           inv_alpha = 1.0 - alpha
           Larb::Color.new(
-            source.r * alpha + destination.r * inv_alpha,
-            source.g * alpha + destination.g * inv_alpha,
-            source.b * alpha + destination.b * inv_alpha,
-            alpha + destination.a * inv_alpha
+            (source.r * alpha) + (destination.r * inv_alpha),
+            (source.g * alpha) + (destination.g * inv_alpha),
+            (source.b * alpha) + (destination.b * inv_alpha),
+            alpha + (destination.a * inv_alpha)
           )
         else
           source

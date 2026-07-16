@@ -31,7 +31,7 @@ module RBGL
             framebuffer.width.times do |x|
               output << encode_color(framebuffer.get_pixel(x, y))
             end
-            output << "\x00" * (@bytes_per_line - framebuffer.width * @bytes_per_pixel)
+            output << ("\x00" * (@bytes_per_line - (framebuffer.width * @bytes_per_pixel)))
           end
 
           output
@@ -46,8 +46,7 @@ module RBGL
 
           [pixel].pack(case @bytes_per_pixel
                        when 2 then "S<"
-                       when 3 then "L<"
-                       when 4 then "L<"
+                       when 3, 4 then "L<"
                        end).byteslice(0, @bytes_per_pixel)
         end
 

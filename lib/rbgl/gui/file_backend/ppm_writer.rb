@@ -5,6 +5,7 @@ module RBGL
     class FileBackend < Backend
       class PpmWriter < FrameWriter
         def initialize(binary:)
+          super()
           @binary = binary
         end
 

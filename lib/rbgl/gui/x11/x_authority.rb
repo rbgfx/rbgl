@@ -11,7 +11,7 @@ module RBGL
         FAMILY_WILD = 65_535
         AUTH_NAME = "MIT-MAGIC-COOKIE-1"
 
-        Entry = Struct.new(:family, :address, :display, :name, :data, keyword_init: true)
+        Entry = Struct.new(:family, :address, :display_number, :name, :data, keyword_init: true)
 
         def self.cookie_for(host:, display_number:, env: ENV)
           path = env["XAUTHORITY"] || default_path(env)
@@ -35,7 +35,7 @@ module RBGL
 
         def cookie_for(host:, display_number:)
           candidates = @entries.select do |entry|
-            entry.display == display_number.to_s && entry.name == AUTH_NAME
+            entry.display_number == display_number.to_s && entry.name == AUTH_NAME
           end
           candidates.find { |entry| address_matches?(entry, host) }&.data
         end
@@ -49,10 +49,16 @@ module RBGL
           while offset < data.bytesize
             family, offset = read_u16(data, offset)
             address, offset = read_field(data, offset)
-            display, offset = read_field(data, offset)
+            display_number, offset = read_field(data, offset)
             name, offset = read_field(data, offset)
             cookie, offset = read_field(data, offset)
-            entries << Entry.new(family: family, address: address, display: display, name: name, data: cookie)
+            entries << Entry.new(
+              family: family,
+              address: address,
+              display_number: display_number,
+              name: name,
+              data: cookie
+            )
           end
 
           entries

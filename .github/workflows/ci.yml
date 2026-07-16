@@ -38,3 +38,46 @@ jobs:
           ruby -e 'require "rbgl"; puts RBGL::VERSION'
       - name: Run doctor (headless-safe)
         run: ruby exe/rbgl doctor --json
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Run correctness lint
+        run: bundle exec rake lint
+
+  native-backends:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install display servers
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes weston xvfb
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Smoke test X11 through Xvfb
+        run: xvfb-run --auto-servernum env RBGL_SMOKE_BACKEND=x11 bundle exec ruby test/integration/native_backend_smoke.rb
+      - name: Smoke test Wayland through headless Weston
+        run: |
+          runtime_dir="$(mktemp -d)"
+          chmod 700 "$runtime_dir"
+          export XDG_RUNTIME_DIR="$runtime_dir"
+          export WAYLAND_DISPLAY=wayland-rbgl
+          weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 >weston.log 2>&1 &
+          weston_pid=$!
+          trap 'kill "$weston_pid"; rm -rf "$runtime_dir"' EXIT
+          for _attempt in $(seq 1 50); do
+            test -S "$runtime_dir/$WAYLAND_DISPLAY" && break
+            sleep 0.1
+          done
+          test -S "$runtime_dir/$WAYLAND_DISPLAY"
+          RBGL_SMOKE_BACKEND=wayland bundle exec ruby test/integration/native_backend_smoke.rb

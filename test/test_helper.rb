@@ -2,7 +2,7 @@
 
 require "simplecov"
 SimpleCov.start do
-  add_filter "/test/"
+  add_filter %r{/test/}
   minimum_coverage 90
 end
 
