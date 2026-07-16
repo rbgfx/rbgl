@@ -3,7 +3,7 @@
 module RBGL
   module GUI
     class BackendFactory
-      AUTO_BACKEND_ERRORS = [LoadError, SystemCallError, BackendUnavailable].freeze
+      AUTO_BACKEND_ERRORS = [LoadError, SystemCallError, TypeError, BackendUnavailable].freeze
 
       class << self
         def build(backend, width:, height:, title:, platform: RUBY_PLATFORM, env: ENV, **options)

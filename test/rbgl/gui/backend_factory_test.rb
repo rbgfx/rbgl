@@ -117,6 +117,26 @@ class BackendFactoryTest < Test::Unit::TestCase
     assert_equal [:wayland, :x11], calls
   end
 
+  test "build_auto_backend falls back from a native initialization type error" do
+    builder = lambda do |backend, **|
+      raise TypeError, "invalid native descriptor" if backend == :wayland
+
+      backend
+    end
+
+    backend = RBGL::GUI::BackendFactory.send(
+      :build_auto_backend,
+      width: 64,
+      height: 48,
+      title: "Test",
+      platform: "x86_64-linux",
+      env: { "WAYLAND_DISPLAY" => "wayland-0", "DISPLAY" => ":0" },
+      builder: builder
+    )
+
+    assert_equal :x11, backend
+  end
+
   test "build_auto_backend raises when every auto backend fails" do
     builder = lambda do |_backend, **|
       raise Errno::ECONNREFUSED, "cannot connect"
