@@ -43,7 +43,20 @@ module RBGL
       end
 
       def set_pixels(buffer, width, height)
-        present(Engine::Framebuffer.from_rgba_bytes(width, height, buffer))
+        bytes = validate_rgba_buffer(buffer, width, height)
+        present(Engine::Framebuffer.from_rgba_bytes(width, height, bytes))
+      end
+
+      protected
+
+      def validate_rgba_buffer(buffer, width, height)
+        bytes = String.try_convert(buffer)
+        raise ArgumentError, "Pixel buffer must be a String" unless bytes
+
+        expected_size = width * height * 4
+        return bytes if bytes.bytesize == expected_size
+
+        raise ArgumentError, "Pixel buffer size mismatch: expected #{expected_size}, got #{bytes.bytesize}"
       end
     end
   end

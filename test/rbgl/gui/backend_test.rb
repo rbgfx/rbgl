@@ -92,6 +92,18 @@ class BackendTest < Test::Unit::TestCase
     assert_equal [255, 0, 0, 255], backend.framebuffer.to_rgba_bytes.bytes
   end
 
+  test "set_pixels rejects a malformed RGBA buffer before presentation" do
+    backend = Class.new(RBGL::GUI::Backend) do
+      def present(_framebuffer)
+        flunk("malformed pixels must not be presented")
+      end
+    end.new(1, 1)
+
+    error = assert_raise(ArgumentError) { backend.set_pixels("short", 2, 1) }
+
+    assert_includes error.message, "expected 8"
+  end
+
   test "native extensions are absent from the portable backend" do
     backend = RBGL::GUI::Backend.new(640, 480)
 

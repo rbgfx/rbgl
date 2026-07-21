@@ -55,7 +55,8 @@ module RBGL
         def set_pixels(buffer, width, height)
           return unless @handle
 
-          Metaco.set_pixels(@handle, buffer, width, height)
+          bytes = validate_rgba_buffer(buffer, width, height)
+          Metaco.set_pixels(@handle, bytes, width, height)
           Metaco.present(@handle)
         end
 

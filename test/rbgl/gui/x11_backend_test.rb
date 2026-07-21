@@ -739,7 +739,7 @@ class X11ConnectionTest < Test::Unit::TestCase
     bytes = encoder.encode(framebuffer)
 
     assert_equal [0, 0, 255, 0], bytes.bytes
-    assert_equal 4, encoder.bytes_per_line
+    assert_equal 4, encoder.bytes_per_line(1)
     assert_equal 3, encoder.bytes_per_pixel
   end
 
@@ -754,6 +754,49 @@ class X11ConnectionTest < Test::Unit::TestCase
         blue_mask: 0
       )
     end
+  end
+
+  test "pixel encoder exposes stride before encoding" do
+    encoder = RBGL::GUI::X11::PixelEncoder.new(
+      bits_per_pixel: 24,
+      scanline_pad: 32,
+      visual_class: 4,
+      red_mask: 0xFF0000,
+      green_mask: 0x00FF00,
+      blue_mask: 0x0000FF
+    )
+
+    assert_equal 8, encoder.bytes_per_line(2)
+  end
+
+  test "pixel encoder uses the direct BGRA path for standard visuals" do
+    framebuffer = RBGL::Engine::Framebuffer.new(1, 1)
+    framebuffer.set_pixel(0, 0, Larb::Color.new(1.0, 0.5, 0.0, 0.25))
+    encoder = RBGL::GUI::X11::PixelEncoder.new(
+      bits_per_pixel: 32,
+      scanline_pad: 32,
+      visual_class: 4,
+      red_mask: 0xFF0000,
+      green_mask: 0x00FF00,
+      blue_mask: 0x0000FF
+    )
+
+    assert_equal [0, 128, 255, 64], encoder.encode(framebuffer).bytes
+    assert_equal [0, 128, 255, 64], encoder.encode_rgba("\xFF\x80\x00\x40", 1, 1).bytes
+  end
+
+  test "pixel encoder respects big endian image order for arbitrary visuals" do
+    encoder = RBGL::GUI::X11::PixelEncoder.new(
+      bits_per_pixel: 24,
+      scanline_pad: 8,
+      visual_class: 4,
+      red_mask: 0xFF0000,
+      green_mask: 0x00FF00,
+      blue_mask: 0x0000FF,
+      image_byte_order: :big
+    )
+
+    assert_equal [255, 128, 0], encoder.encode_rgba("\xFF\x80\x00\xFF", 1, 1).bytes
   end
 
   private
@@ -831,6 +874,7 @@ class X11BackendTest < Test::Unit::TestCase
     display.define_singleton_method(:red_mask) { 0x00FF0000 }
     display.define_singleton_method(:green_mask) { 0x0000FF00 }
     display.define_singleton_method(:blue_mask) { 0x000000FF }
+    display.define_singleton_method(:image_byte_order) { :little }
     display.define_singleton_method(:put_image) { |**kwargs| put_image_args = kwargs }
     display.define_singleton_method(:flush) { flushed += 1 }
 
@@ -850,6 +894,7 @@ class X11BackendTest < Test::Unit::TestCase
     attr_reader :put_image_calls, :destroy_window_calls
     attr_reader :root_depth, :root, :root_visual, :black_pixel
     attr_reader :bits_per_pixel, :scanline_pad, :visual_class, :red_mask, :green_mask, :blue_mask
+    attr_reader :image_byte_order
 
     def initialize
       @ids = [101, 202]
@@ -870,6 +915,7 @@ class X11BackendTest < Test::Unit::TestCase
       @red_mask = 0x00FF0000
       @green_mask = 0x0000FF00
       @blue_mask = 0x000000FF
+      @image_byte_order = :little
     end
 
     def generate_id
@@ -961,6 +1007,19 @@ class X11BackendTest < Test::Unit::TestCase
     assert_equal :z_pixmap, display.put_image_calls.first[:format]
     assert_equal 101, display.put_image_calls.first[:drawable]
     assert_equal 202, display.put_image_calls.first[:gc]
+  end
+
+  test "set_pixels uploads raw RGBA bytes without building a framebuffer" do
+    backend = RBGL::GUI::X11::Backend.allocate
+    display = FakeDisplay.new
+    backend.instance_variable_set(:@display, display)
+    backend.instance_variable_set(:@window, { id: 101, gc: 202 })
+
+    backend.set_pixels("\xFF\x80\x00\x40", 1, 1)
+
+    upload = display.put_image_calls.first
+    assert_equal [0, 128, 255, 64], upload[:data].bytes
+    assert_equal 4, upload[:bytes_per_line]
   end
 
   test "poll_events converts X11 raw events to GUI events" do

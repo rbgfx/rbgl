@@ -47,16 +47,28 @@ module RBGL
         end
 
         def present(framebuffer)
+          return false unless @window
+
+          present_bytes(convert_to_wayland_format(framebuffer), framebuffer.width, framebuffer.height)
+        end
+
+        def set_pixels(buffer, width, height)
+          return false unless @window
+
+          bytes = validate_rgba_buffer(buffer, width, height)
+          present_bytes(rgba_to_wayland_bytes(bytes), width, height)
+        end
+
+        private def present_bytes(buffer, width, height)
           window = @window
           return false unless window
 
           buffer_object = wait_for_available_buffer(window)
           return false unless buffer_object
 
-          buffer = convert_to_wayland_format(framebuffer)
           buffer_object.write(buffer)
 
-          window[:surface].damage(0, 0, framebuffer.width, framebuffer.height)
+          window[:surface].damage(0, 0, width, height)
           window[:surface].attach(buffer_object, 0, 0)
           buffer_object.mark_in_use
           window[:shm_buffer] = buffer_object
@@ -106,6 +118,17 @@ module RBGL
 
         def convert_to_wayland_format(framebuffer)
           framebuffer.to_bgra_bytes
+        end
+
+        def rgba_to_wayland_bytes(buffer)
+          output = String.new(capacity: buffer.bytesize, encoding: Encoding::BINARY)
+          byte_index = 0
+          while byte_index < buffer.bytesize
+            output << buffer.getbyte(byte_index + 2) << buffer.getbyte(byte_index + 1) <<
+                      buffer.getbyte(byte_index) << buffer.getbyte(byte_index + 3)
+            byte_index += 4
+          end
+          output
         end
 
         def convert_event(raw)

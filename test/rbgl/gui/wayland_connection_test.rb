@@ -827,6 +827,30 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_equal free_buffer, backend.instance_variable_get(:@window)[:shm_buffer]
   end
 
+  test "set_pixels writes raw RGBA bytes directly in Wayland byte order" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    written = nil
+    buffer = Object.new
+    buffer.define_singleton_method(:available?) { true }
+    buffer.define_singleton_method(:write) { |data| written = data }
+    buffer.define_singleton_method(:mark_in_use) {}
+    surface = Object.new
+    surface.define_singleton_method(:damage) { |*_args| }
+    surface.define_singleton_method(:attach) { |*_args| }
+    surface.define_singleton_method(:commit) {}
+    connection = Object.new
+    connection.define_singleton_method(:flush) {}
+    backend.instance_variable_set(:@connection, connection)
+    backend.instance_variable_set(
+      :@window,
+      { surface: surface, buffers: [buffer], shm_buffer: buffer, should_close: false }
+    )
+
+    backend.set_pixels("\xFF\x80\x00\x40", 1, 1)
+
+    assert_equal [0, 128, 255, 64], written.bytes
+  end
+
   test "present waits for a released shm buffer instead of dropping the frame" do
     backend = RBGL::GUI::Wayland::Backend.allocate
     framebuffer = RBGL::Engine::Framebuffer.new(2, 2)

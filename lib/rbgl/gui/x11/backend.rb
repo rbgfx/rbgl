@@ -53,21 +53,33 @@ module RBGL
         end
 
         def present(framebuffer)
-          window = @window
-          return false unless window
+          return false unless @window
 
           buffer = convert_to_x11_format(framebuffer)
+          present_bytes(buffer, framebuffer.width, framebuffer.height)
+        end
+
+        def set_pixels(buffer, width, height)
+          return false unless @window
+
+          bytes = validate_rgba_buffer(buffer, width, height)
+          present_bytes(pixel_encoder.encode_rgba(bytes, width, height), width, height)
+        end
+
+        private def present_bytes(buffer, width, height)
+          window = @window
+          return false unless window
 
           @display.put_image(
             format: :z_pixmap,
             drawable: window[:id],
             gc: window[:gc],
-            width: framebuffer.width,
-            height: framebuffer.height,
+            width: width,
+            height: height,
             dst_x: 0, dst_y: 0,
             depth: @display.root_depth,
             data: buffer,
-            bytes_per_line: pixel_encoder.bytes_per_line
+            bytes_per_line: pixel_encoder.bytes_per_line(width)
           )
 
           @display.flush
@@ -116,7 +128,8 @@ module RBGL
             visual_class: @display.visual_class,
             red_mask: @display.red_mask,
             green_mask: @display.green_mask,
-            blue_mask: @display.blue_mask
+            blue_mask: @display.blue_mask,
+            image_byte_order: @display.image_byte_order
           )
         end
 
