@@ -93,13 +93,10 @@ module RBGL
 
         def change_property_data(window, property_atom, type_atom, data, mode: :replace, format: 8)
           data_bytes, value_count = pack_property_data(data, format)
-          request = [
-            window,
-            property_atom,
-            type_atom,
-            format,
-            value_count
-          ].pack("VVVCV") + "\x00\x00\x00" + pad_to_4(data_bytes)
+          request = [window, property_atom, type_atom, format].pack("VVVC") +
+                    "\x00\x00\x00" +
+                    [value_count].pack("V") +
+                    pad_to_4(data_bytes)
 
           [PROPERTY_MODES.fetch(mode), request]
         end

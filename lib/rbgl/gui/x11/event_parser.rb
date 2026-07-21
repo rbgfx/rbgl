@@ -34,6 +34,13 @@ module RBGL
               message_type: data[8, 4].unpack1("V"),
               data32: data[12, 20].unpack("V5")
             }
+          when 34
+            {
+              type: :mapping_notify,
+              request: mapping_request(data.getbyte(1)),
+              first_keycode: data.getbyte(4),
+              count: data.getbyte(5)
+            }
           else
             { type: :unknown, code: event_type }
           end
@@ -53,6 +60,10 @@ module RBGL
             y: y,
             button: data[1, 1].unpack1("C")
           }
+        end
+
+        def mapping_request(code)
+          { 0 => :modifier, 1 => :keyboard, 2 => :pointer }.fetch(code, :unknown)
         end
       end
     end

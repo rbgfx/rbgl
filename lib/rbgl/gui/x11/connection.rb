@@ -14,6 +14,8 @@ module RBGL
   module GUI
     module X11
       class Connection
+        DEFAULT_REPLY_TIMEOUT = 5.0
+
         ATOM_NAMES = {
           wm_protocols: "WM_PROTOCOLS",
           wm_delete_window: "WM_DELETE_WINDOW"
@@ -22,9 +24,9 @@ module RBGL
         attr_reader :default_screen, :resource_id_base, :resource_id_mask
         attr_reader :root, :root_depth, :root_visual, :white_pixel, :black_pixel
         attr_reader :maximum_request_length, :bits_per_pixel, :scanline_pad
-        attr_reader :visual_class, :red_mask, :green_mask, :blue_mask
+        attr_reader :visual_class, :red_mask, :green_mask, :blue_mask, :image_byte_order
 
-        def initialize(display_name, env: ENV)
+        def initialize(display_name, env: ENV, reply_timeout: DEFAULT_REPLY_TIMEOUT)
           host, display_num, screen_num = parse_display_name(display_name)
           @socket = connect(host, display_num)
           @transport = Transport.new(@socket)
@@ -33,8 +35,10 @@ module RBGL
           @pending_replies = {}
           @sequence = 0
           @default_screen = screen_num
+          @reply_timeout = reply_timeout
 
           handshake(host: host, display_num: display_num, env: env)
+          load_keyboard_mapping
         rescue StandardError
           @transport&.close
           raise
@@ -158,8 +162,6 @@ module RBGL
           flush
 
           reply = read_reply(sequence)
-          return 0 unless reply
-
           reply[8, 4].unpack1("V")
         end
 
@@ -214,29 +216,36 @@ module RBGL
           @transport.write(init_request)
           @transport.flush
 
-          header = @transport.read_exact(8)
+          header = @transport.read_exact(8, timeout: @reply_timeout)
           raise GUI::BackendUnavailable, "X11 connection closed during handshake" unless header&.bytesize == 8
 
           status = header.unpack1("C")
           unless status == 1
             reason_length = header.getbyte(1)
-            reason = reason_length.positive? ? @transport.read_exact(pad_length(reason_length)).byteslice(0, reason_length) : nil
+            reason = if reason_length.positive?
+                       @transport.read_exact(pad_length(reason_length), timeout: @reply_timeout)
+                                 .byteslice(0, reason_length)
+                     end
             detail = reason && !reason.empty? ? ": #{reason}" : ""
             raise GUI::BackendUnavailable, "X11 connection failed#{detail}"
           end
 
           additional_length = header[6, 2].unpack1("v")
-          data = @transport.read_exact(additional_length * 4)
+          data = @transport.read_exact(additional_length * 4, timeout: @reply_timeout)
 
           parse_server_info(data)
+        rescue EOFError, IO::WaitReadable => error
+          raise GUI::BackendUnavailable, "X11 handshake failed: #{error.message}"
         end
 
         def parse_server_info(data)
           setup = SetupParser.new.parse(data)
           screen = setup.screens.fetch(@default_screen)
           format = setup.pixmap_formats.find { |candidate| candidate.depth == screen.root_depth }
-          visual = screen.visuals.find { |candidate| candidate.id == screen.root_visual }
+          depth = screen.depths.find { |candidate| candidate.depth == screen.root_depth }
+          visual = depth&.visuals&.find { |candidate| candidate.id == screen.root_visual }
           raise GUI::BackendUnavailable, "No X11 pixmap format for root depth #{screen.root_depth}" unless format
+          raise GUI::BackendUnavailable, "No X11 visual group for root depth #{screen.root_depth}" unless depth
           raise GUI::BackendUnavailable, "No X11 root visual metadata for #{screen.root_visual}" unless visual
 
           @resource_id_base = setup.resource_id_base
@@ -244,6 +253,7 @@ module RBGL
           @maximum_request_length = setup.maximum_request_length
           @minimum_keycode = setup.minimum_keycode
           @maximum_keycode = setup.maximum_keycode
+          @image_byte_order = setup.image_byte_order
           @root = screen.root
           @root_depth = screen.root_depth
           @root_visual = screen.root_visual
@@ -316,7 +326,7 @@ module RBGL
 
               @pending_replies[sequence] = packet
             else
-              event = event_parser.parse(packet)
+              event = parse_event(packet)
               @pending_events << event if event
             end
           end
@@ -333,7 +343,7 @@ module RBGL
             return nil
           end
 
-          event_parser.parse(packet)
+          parse_event(packet)
         end
 
         def resolve_atom(name)
@@ -363,13 +373,19 @@ module RBGL
         end
 
         def read_packet
-          header = @transport.read_exact(32)
+          header = @transport.read_exact(32, timeout: @reply_timeout)
           return header unless header.getbyte(0) == 1
 
           additional = header.byteslice(4, 4).unpack1("V")
-          additional.positive? ? header + @transport.read_exact(additional * 4) : header
-        rescue EOFError => error
+          additional.positive? ? header + @transport.read_exact(additional * 4, timeout: @reply_timeout) : header
+        rescue EOFError, IO::WaitReadable => error
           raise GUI::BackendUnavailable, error.message
+        end
+
+        def parse_event(packet)
+          event = event_parser.parse(packet)
+          @keyboard_mapping = nil if event&.[](:type) == :mapping_notify && event[:request] == :keyboard
+          event
         end
 
         def raise_protocol_error(packet)

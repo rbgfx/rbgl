@@ -71,7 +71,9 @@ class X11ConnectionTest < Test::Unit::TestCase
     connection.change_property(10, :wm_protocols, :atom, [77], format: 32)
 
     opcode, request, extra = sent
-    window, property_atom, type_atom, format, value_count = request[0, 17].unpack("VVVCV")
+    window, property_atom, type_atom = request.byteslice(0, 12).unpack("V3")
+    format = request.getbyte(12)
+    value_count = request.byteslice(16, 4).unpack1("V")
 
     assert_equal 18, opcode
     assert_equal 0, extra
@@ -79,6 +81,7 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 68, property_atom
     assert_equal 4, type_atom
     assert_equal 32, format
+    assert_equal "\x00\x00\x00", request.byteslice(13, 3)
     assert_equal 1, value_count
     assert_equal [77].pack("V"), request[20, 4]
   end
@@ -433,6 +436,34 @@ class X11ConnectionTest < Test::Unit::TestCase
     authority&.close!
   end
 
+  test "Xauthority accepts wildcard displays and local FQDN variants" do
+    cookie = "wildcard-cookie"
+    data = xauthority_entry(
+      RBGL::GUI::X11::XAuthority::FAMILY_LOCAL,
+      "#{Socket.gethostname.split('.').first}.example.test",
+      "",
+      cookie
+    )
+
+    resolved = RBGL::GUI::X11::XAuthority.new(data).cookie_for(host: nil, display_number: 42)
+
+    assert_equal cookie, resolved
+  end
+
+  test "Xauthority matches IPv6 entries" do
+    cookie = "ipv6-cookie"
+    data = xauthority_entry(
+      RBGL::GUI::X11::XAuthority::FAMILY_INTERNET6,
+      IPAddr.new("::1").hton,
+      "0",
+      cookie
+    )
+
+    resolved = RBGL::GUI::X11::XAuthority.new(data).cookie_for(host: "::1", display_number: 0)
+
+    assert_equal cookie, resolved
+  end
+
   test "parse_server_info extracts root screen metadata" do
     connection = build_connection
     data = build_setup_data
@@ -447,6 +478,19 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 65_535, connection.maximum_request_length
     assert_equal 32, connection.bits_per_pixel
     assert_equal 32, connection.scanline_pad
+    assert_equal :little, connection.image_byte_order
+
+    setup = RBGL::GUI::X11::SetupParser.new.parse(data)
+    assert_equal 24, setup.screens.first.depths.first.depth
+  end
+
+  test "setup parser preserves the server image byte order" do
+    data = build_setup_data
+    data.setbyte(22, 1)
+
+    setup = RBGL::GUI::X11::SetupParser.new.parse(data)
+
+    assert_equal :big, setup.image_byte_order
   end
 
   test "parse_server_info honors the DISPLAY screen number" do
@@ -539,6 +583,16 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_includes error.message, "opcode 16.2"
   end
 
+  test "read_reply times out instead of blocking forever" do
+    connection = build_connection
+
+    error = assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.send(:read_reply, 1)
+    end
+
+    assert_match(/resource temporarily unavailable|readable/i, error.message)
+  end
+
   test "transport buffers partial X11 packets" do
     reader, writer = IO.pipe
     transport = RBGL::GUI::X11::Transport.new(reader)
@@ -577,6 +631,11 @@ class X11ConnectionTest < Test::Unit::TestCase
           data[12, 20] = [77, 1, 2, 3, 4].pack("V5")
         end,
         { type: :client_message, format: 32, window: 7, message_type: 68, data32: [77, 1, 2, 3, 4] }
+      ],
+      [
+        [34, 1],
+        ->(data) { data.setbyte(1, 1); data.setbyte(4, 8); data.setbyte(5, 2) },
+        { type: :mapping_notify, request: :keyboard, first_keycode: 8, count: 2 }
       ],
       [[99, 0], ->(_data) {}, { type: :unknown, code: 99 }]
     ]
@@ -618,13 +677,26 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 3, interned.size
   end
 
-  test "atom cache does not retain failed zero resolutions" do
+  test "atom cache memoizes zero resolutions" do
     resolutions = [0, 77]
     cache = RBGL::GUI::X11::AtomCache.new { resolutions.shift }
 
     assert_equal 0, cache.fetch(:optional)
-    assert_equal 77, cache.fetch(:optional)
-    assert_equal 77, cache.fetch(:optional)
+    assert_equal 0, cache.fetch(:optional)
+    assert_equal [77], resolutions
+  end
+
+  test "keyboard MappingNotify invalidates the cached server mapping" do
+    payload = "\x00" * 32
+    payload.setbyte(0, 34)
+    payload.setbyte(1, 1)
+    connection = build_connection(socket: FakeSocket.new(payload))
+    connection.instance_variable_set(:@keyboard_mapping, { 8 => [0x61] })
+
+    event = connection.send(:read_event)
+
+    assert_equal :mapping_notify, event[:type]
+    assert_nil connection.instance_variable_get(:@keyboard_mapping)
   end
 
   test "key_for_keycode loads and caches the server keyboard mapping" do
@@ -695,6 +767,7 @@ class X11ConnectionTest < Test::Unit::TestCase
     connection.instance_variable_set(:@sequence, 0)
     connection.instance_variable_set(:@default_screen, 0)
     connection.instance_variable_set(:@maximum_request_length, 65_535)
+    connection.instance_variable_set(:@reply_timeout, 0.01)
     connection
   end
 
@@ -726,6 +799,14 @@ class X11ConnectionTest < Test::Unit::TestCase
 
   def xauthority_field(value)
     [value.bytesize].pack("n") + value
+  end
+
+  def xauthority_entry(family, address, display, cookie)
+    [family].pack("n") +
+      xauthority_field(address) +
+      xauthority_field(display) +
+      xauthority_field(RBGL::GUI::X11::XAuthority::AUTH_NAME) +
+      xauthority_field(cookie)
   end
 end
 

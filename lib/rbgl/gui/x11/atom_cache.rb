@@ -20,7 +20,7 @@ module RBGL
           return @cache[name] if @cache.key?(name)
 
           resolved = @resolver.call(name)
-          @cache[name] = resolved unless resolved.zero?
+          @cache[name] = resolved
           resolved
         end
       end

@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
 require "socket"
+require "ipaddr"
 
 module RBGL
   module GUI
     module X11
       class XAuthority
         FAMILY_INTERNET = 0
+        FAMILY_INTERNET6 = 6
         FAMILY_LOCAL = 256
         FAMILY_WILD = 65_535
         AUTH_NAME = "MIT-MAGIC-COOKIE-1"
@@ -35,7 +37,7 @@ module RBGL
 
         def cookie_for(host:, display_number:)
           candidates = @entries.select do |entry|
-            entry.display_number == display_number.to_s && entry.name == AUTH_NAME
+            (entry.display_number.empty? || entry.display_number == display_number.to_s) && entry.name == AUTH_NAME
           end
           candidates.find { |entry| address_matches?(entry, host) }&.data
         end
@@ -82,17 +84,22 @@ module RBGL
         def address_matches?(entry, host)
           return true if entry.family == FAMILY_WILD
           return local_address_matches?(entry.address) if host.nil? && entry.family == FAMILY_LOCAL
-          return false unless entry.family == FAMILY_INTERNET
+          return false unless [FAMILY_INTERNET, FAMILY_INTERNET6].include?(entry.family)
 
-          Addrinfo.getaddrinfo(host, nil, :INET).any? do |address|
-            address.ip_address.split(".").map(&:to_i).pack("C4") == entry.address
+          family = entry.family == FAMILY_INTERNET ? :INET : :INET6
+          Addrinfo.getaddrinfo(host, nil, family).any? do |address|
+            IPAddr.new(address.ip_address).hton == entry.address
           end
         rescue SocketError
           false
         end
 
         def local_address_matches?(address)
-          address.empty? || address == Socket.gethostname
+          return true if address.empty?
+
+          expected = address.downcase
+          actual = Socket.gethostname.downcase
+          expected == actual || expected.split(".", 2).first == actual.split(".", 2).first
         end
       end
     end

@@ -7,9 +7,9 @@ module RBGL
   module GUI
     module X11
       class Backend < GUI::Backend
-        def initialize(width, height, title = "RBGL", env: ENV)
+        def initialize(width, height, title = "RBGL", env: ENV, reply_timeout: Connection::DEFAULT_REPLY_TIMEOUT)
           super(width, height, title)
-          @display = Connection.new(env["DISPLAY"] || ":0", env: env)
+          @display = Connection.new(env["DISPLAY"] || ":0", env: env, reply_timeout: reply_timeout)
           @window = nil
           setup_window(width, height, title)
         end

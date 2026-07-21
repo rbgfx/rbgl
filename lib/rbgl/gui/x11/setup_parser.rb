@@ -8,6 +8,7 @@ module RBGL
           :resource_id_base,
           :resource_id_mask,
           :maximum_request_length,
+          :image_byte_order,
           :minimum_keycode,
           :maximum_keycode,
           :pixmap_formats,
@@ -15,15 +16,20 @@ module RBGL
           keyword_init: true
         )
         PixmapFormat = Struct.new(:depth, :bits_per_pixel, :scanline_pad, keyword_init: true)
+        Depth = Struct.new(:depth, :visuals, keyword_init: true)
         Screen = Struct.new(
           :root,
           :white_pixel,
           :black_pixel,
           :root_visual,
           :root_depth,
-          :visuals,
+          :depths,
           keyword_init: true
-        )
+        ) do
+          def visuals
+            depths.flat_map(&:visuals)
+          end
+        end
         Visual = Struct.new(:id, :visual_class, :red_mask, :green_mask, :blue_mask, keyword_init: true)
 
         def parse(data)
@@ -40,6 +46,7 @@ module RBGL
             resource_id_base: data.byteslice(4, 4).unpack1("V"),
             resource_id_mask: data.byteslice(8, 4).unpack1("V"),
             maximum_request_length: data.byteslice(18, 2).unpack1("v"),
+            image_byte_order: parse_image_byte_order(data.getbyte(22)),
             minimum_keycode: data.getbyte(26),
             maximum_keycode: data.getbyte(27),
             pixmap_formats: formats,
@@ -73,16 +80,19 @@ module RBGL
           header = required_slice(data, offset, 40)
           depth_count = header.getbyte(39)
           cursor = offset + 40
-          visuals = []
+          depths = []
 
           depth_count.times do
             depth_header = required_slice(data, cursor, 8)
+            depth_value = depth_header.getbyte(0)
             visual_count = depth_header.byteslice(2, 2).unpack1("v")
             cursor += 8
+            visuals = []
             visual_count.times do
               visuals << parse_visual(required_slice(data, cursor, 24))
               cursor += 24
             end
+            depths << Depth.new(depth: depth_value, visuals: visuals)
           end
 
           screen = Screen.new(
@@ -91,7 +101,7 @@ module RBGL
             black_pixel: header.byteslice(12, 4).unpack1("V"),
             root_visual: header.byteslice(32, 4).unpack1("V"),
             root_depth: header.getbyte(38),
-            visuals: visuals
+            depths: depths
           )
           [screen, cursor]
         end
@@ -115,6 +125,12 @@ module RBGL
 
         def padded_length(length)
           (length + 3) & ~3
+        end
+
+        def parse_image_byte_order(value)
+          { 0 => :little, 1 => :big }.fetch(value) do
+            raise ArgumentError, "Unsupported X11 image byte order: #{value}"
+          end
         end
       end
     end
