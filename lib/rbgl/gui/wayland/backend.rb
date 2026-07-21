@@ -132,6 +132,8 @@ module RBGL
             Event.new(:mouse_press, button: raw[:button], x: raw[:x], y: raw[:y])
           when :pointer_button_release
             Event.new(:mouse_release, button: raw[:button], x: raw[:x], y: raw[:y])
+          when :pointer_axis
+            Event.new(:mouse_scroll, x: raw[:x], y: raw[:y], axis: raw[:axis], value: raw[:value])
           end
         end
 
@@ -185,7 +187,7 @@ module RBGL
 
           file = create_anonymous_file(size)
           pool = @connection.shm.create_pool(file, size)
-          buffer = pool.create_buffer(0, width, height, width * 4, :argb8888)
+          buffer = pool.create_buffer(0, width, height, width * 4, :xrgb8888)
 
           ShmBuffer.new(file, pool, buffer)
         end

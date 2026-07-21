@@ -25,6 +25,7 @@ module RBGL
           @next_id = 2
           @globals = {}
           @pending_events = []
+          @received_fds = []
           @read_buffer = String.new(encoding: Encoding::BINARY)
           @closed = false
 
@@ -59,6 +60,14 @@ module RBGL
 
         def store_global(interface, name:, version:)
           @globals[interface] = { name: name, version: version }
+        end
+
+        def remove_global(name)
+          @globals.delete_if { |_interface, global| global[:name] == name }
+        end
+
+        def consume_received_fd
+          @received_fds.shift
         end
 
         def queue_event(event)
@@ -106,7 +115,6 @@ module RBGL
 
         def roundtrip
           callback = @display.sync
-          @objects[callback.id] = callback
           flush
           deadline = monotonic_time + @roundtrip_timeout
 
@@ -132,6 +140,8 @@ module RBGL
         def close
           return if @closed
 
+          @received_fds&.each { |fd| fd.close unless fd.closed? }
+          @received_fds&.clear
           @socket.close unless @socket.closed?
           @closed = true
         end
@@ -186,14 +196,38 @@ module RBGL
 
           read_any = false
           loop do
-            chunk = @socket.read_nonblock(READ_CHUNK_SIZE, exception: false)
-            break if chunk == :wait_readable
+            message = receive_message
+            break if message == :wait_readable
+
+            chunk, ancillary_data = message
             raise GUI::BackendUnavailable, "Wayland compositor closed the connection" if chunk.nil?
 
             @read_buffer << chunk
+            ancillary_data.each do |control|
+              @received_fds.concat(control.unix_rights)
+            rescue TypeError
+              next
+            end
             read_any = true
           end
           read_any
+        end
+
+        def receive_message
+          unless @socket.respond_to?(:recvmsg_nonblock)
+            return [@socket.read_nonblock(READ_CHUNK_SIZE, exception: false), []]
+          end
+
+          result = @socket.recvmsg_nonblock(
+            READ_CHUNK_SIZE,
+            0,
+            nil,
+            scm_rights: true,
+            exception: false
+          )
+          return :wait_readable if result == :wait_readable
+
+          [result[0], result.drop(3)]
         end
 
         def bind_globals

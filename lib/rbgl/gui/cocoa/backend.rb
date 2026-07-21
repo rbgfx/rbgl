@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "key_mapper"
+
 module RBGL
   module GUI
     module Cocoa
@@ -11,8 +13,6 @@ module RBGL
       end
 
       class Backend < GUI::Backend
-        KEY_CODES = { 12 => :q, 53 => :escape }.freeze
-
         def initialize(width, height, title = "RBGL", env: ENV)
           @env = env
           unless METACO_AVAILABLE
@@ -93,14 +93,7 @@ module RBGL
         end
 
         def normalize_key(key, char = nil)
-          return key if key.is_a?(Symbol)
-          return KEY_CODES.fetch(key, key) if key.is_a?(Integer)
-
-          text = char.to_s.empty? ? key.to_s : char.to_s
-          return :escape if text == "\e" || text.casecmp?("escape")
-          return text.downcase.to_sym if text.length == 1
-
-          key
+          KeyMapper.key(key, char)
         end
       end
     end

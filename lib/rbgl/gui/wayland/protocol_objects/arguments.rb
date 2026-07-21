@@ -35,15 +35,27 @@ module RBGL
       end
 
       class WaylandObject
-        attr_reader :id, :connection
+        attr_reader :id, :connection, :version
 
-        def initialize(connection, id)
+        def initialize(connection, id, version: 1)
           @connection = connection
           @id = id
+          @version = version
+          @destroyed = false
         end
 
         def send_request(opcode, *args)
           @connection.send_request(@id, opcode, *args)
+        end
+
+        private
+
+        def release(opcode, since: 1)
+          return if @destroyed
+
+          send_request(opcode) if @version >= since
+          @connection.unregister_object(@id) if @connection.respond_to?(:unregister_object)
+          @destroyed = true
         end
       end
     end

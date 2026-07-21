@@ -34,4 +34,26 @@ class CocoaBackendTest < Test::Unit::TestCase
     assert_equal 12, q_event.keycode
     assert_equal :escape, escape_event.key
   end
+
+  test "key mapper handles characterless key releases" do
+    backend = RBGL::GUI::Cocoa::Backend.allocate
+
+    events = {
+      0 => :a,
+      36 => :enter,
+      49 => :space,
+      56 => :left_shift,
+      115 => :home,
+      123 => :left,
+      126 => :up
+    }.map do |keycode, key|
+      [backend.send(:convert_event, { type: :key_release, key: keycode }), key]
+    end
+
+    events.each { |event, key| assert_equal key, event.key }
+  end
+
+  test "key mapper preserves unknown Cocoa key codes" do
+    assert_equal 999, RBGL::GUI::Cocoa::KeyMapper.key(999)
+  end
 end

@@ -26,8 +26,9 @@ module RBGL
             global = globals[interface]
             next unless global
 
-            object_id = registry.bind(global[:name], interface, [global[:version], max_version].min)
-            bound[slot] = @connection.register_object(klass.new(@connection, object_id))
+            version = [global[:version], max_version].min
+            object_id = registry.bind(global[:name], interface, version)
+            bound[slot] = @connection.register_object(klass.new(@connection, object_id, version: version))
           end
         end
 

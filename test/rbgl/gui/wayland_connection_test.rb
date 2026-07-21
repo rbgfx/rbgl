@@ -120,7 +120,7 @@ class WaylandProtocolObjectsTest < Test::Unit::TestCase
 
   test "seat creates and releases pointer and keyboard objects from capabilities" do
     connection = RecordingConnection.new([31, 32])
-    seat = RBGL::GUI::Wayland::Seat.new(connection, 30)
+    seat = RBGL::GUI::Wayland::Seat.new(connection, 30, version: 5)
 
     seat.handle_capabilities(3)
 
@@ -137,6 +137,20 @@ class WaylandProtocolObjectsTest < Test::Unit::TestCase
     assert_nil seat.keyboard
     assert_equal [31, 1, []], connection.requests[-2]
     assert_equal [32, 0, []], connection.requests[-1]
+  end
+
+  test "seat input objects only send release requests when supported" do
+    connection = RecordingConnection.new([41, 42])
+    seat = RBGL::GUI::Wayland::Seat.new(connection, 40, version: 2)
+
+    seat.handle_capabilities(3)
+    seat.handle_capabilities(0)
+    seat.destroy
+
+    assert_equal [
+      [40, 0, [[:new_id, 41]]],
+      [40, 1, [[:new_id, 42]]]
+    ], connection.requests
   end
 end
 
@@ -279,6 +293,20 @@ class WaylandConnectionTest < Test::Unit::TestCase
     assert_true xdg_surface.configured?
   end
 
+  test "registry global_remove discards the advertised global" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    registry = RBGL::GUI::Wayland::Registry.allocate
+    connection.instance_variable_set(:@objects, { 7 => registry })
+    connection.instance_variable_set(
+      :@globals,
+      { "wl_seat" => { name: 5, version: 5 }, "wl_shm" => { name: 6, version: 1 } }
+    )
+
+    connection.send(:handle_event, 7, 1, [5].pack("V"))
+
+    assert_equal({ "wl_shm" => { name: 6, version: 1 } }, connection.globals)
+  end
+
   test "handle_event queues toplevel configure events" do
     connection = RBGL::GUI::Wayland::Connection.allocate
     toplevel = RBGL::GUI::Wayland::XdgToplevel.allocate
@@ -321,6 +349,21 @@ class WaylandConnectionTest < Test::Unit::TestCase
     ], connection.instance_variable_get(:@pending_events)
   end
 
+  test "handle_event tracks keyboard modifiers" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    keyboard = RBGL::GUI::Wayland::Keyboard.new(connection, 21)
+    connection.instance_variable_set(:@objects, { 21 => keyboard })
+    connection.instance_variable_set(:@pending_events, [])
+
+    connection.send(:handle_event, 21, 1, [9, 10, 0].pack("V3"))
+    connection.send(:handle_event, 21, 4, [9, 1, 2, 4, 3].pack("V5"))
+    connection.send(:handle_event, 21, 3, [9, 100, 30, 1].pack("V4"))
+
+    assert_equal({ depressed: 1, latched: 2, locked: 4, group: 3 }, keyboard.modifiers)
+    assert_equal keyboard.modifiers,
+                 connection.instance_variable_get(:@pending_events).first[:modifiers]
+  end
+
   test "handle_event converts pointer motion and button events" do
     connection = RBGL::GUI::Wayland::Connection.allocate
     pointer = RBGL::GUI::Wayland::Pointer.new(connection, 22)
@@ -335,6 +378,21 @@ class WaylandConnectionTest < Test::Unit::TestCase
       { type: :pointer_motion, surface_id: 10, x: 5.0, y: 10.0 },
       { type: :pointer_motion, surface_id: 10, x: 6.0, y: 11.0 },
       { type: :pointer_button_press, surface_id: 10, button: 1, x: 6.0, y: 11.0 }
+    ], connection.instance_variable_get(:@pending_events)
+  end
+
+  test "handle_event converts pointer axis events" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    pointer = RBGL::GUI::Wayland::Pointer.new(connection, 22)
+    pointer.focus(10)
+    pointer.move(6.0, 11.0)
+    connection.instance_variable_set(:@objects, { 22 => pointer })
+    connection.instance_variable_set(:@pending_events, [])
+
+    connection.send(:handle_event, 22, 4, [100, 0, -384].pack("VVl<"))
+
+    assert_equal [
+      { type: :pointer_axis, surface_id: 10, axis: :vertical, value: -1.5, x: 6.0, y: 11.0 }
     ], connection.instance_variable_get(:@pending_events)
   end
 
@@ -436,6 +494,36 @@ class WaylandConnectionTest < Test::Unit::TestCase
     receiver&.close
   end
 
+  test "pump_events receives the keyboard keymap file descriptor" do
+    sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
+    keymap_file = Tempfile.new("rbgl-wayland-keymap")
+    keymap = "xkb_keymap { };\x00"
+    keymap_file.binmode
+    keymap_file.write(keymap)
+    keymap_file.rewind
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    keyboard = RBGL::GUI::Wayland::Keyboard.new(connection, 21)
+    payload = [1, keymap.bytesize].pack("V2")
+    message = [21, ((payload.bytesize + 8) << 16)].pack("VV") + payload
+
+    connection.instance_variable_set(:@socket, receiver)
+    connection.instance_variable_set(:@objects, { 21 => keyboard })
+    connection.instance_variable_set(:@pending_events, [])
+    connection.instance_variable_set(:@received_fds, [])
+    connection.instance_variable_set(:@read_buffer, String.new(encoding: Encoding::BINARY))
+
+    sender.sendmsg(message, 0, nil, Socket::AncillaryData.unix_rights(keymap_file.to_io))
+    connection.pump_events(timeout: 0.01)
+
+    assert_equal :xkb_v1, keyboard.keymap_format
+    assert_equal "xkb_keymap { };", keyboard.keymap
+    assert_empty connection.instance_variable_get(:@received_fds)
+  ensure
+    keymap_file&.close!
+    sender&.close
+    receiver&.close
+  end
+
   test "display delete_id removes released protocol objects" do
     connection = RBGL::GUI::Wayland::Connection.allocate
     display = RBGL::GUI::Wayland::Display.new(connection)
@@ -518,7 +606,7 @@ class WaylandConnectionTest < Test::Unit::TestCase
       connection.roundtrip
     end
 
-    assert_equal callback, connection.instance_variable_get(:@objects)[10]
+    assert_nil connection.instance_variable_get(:@objects)[10]
     assert_equal 1, pump_calls
   end
 end
@@ -579,16 +667,18 @@ class WaylandBackendTest < Test::Unit::TestCase
       FakeConnection.new([
         { type: :key_press, surface_id: 10, key: :escape, keycode: 1 },
         { type: :pointer_motion, surface_id: 10, x: 12.5, y: 20.0 },
-        { type: :pointer_button_press, surface_id: 10, button: 1, x: 12.5, y: 20.0 }
+        { type: :pointer_button_press, surface_id: 10, button: 1, x: 12.5, y: 20.0 },
+        { type: :pointer_axis, surface_id: 10, axis: :vertical, value: -1.0, x: 12.5, y: 20.0 }
       ])
     )
 
     events = backend.poll_events
 
-    assert_equal %i[key_press mouse_move mouse_press], events.map(&:type)
+    assert_equal %i[key_press mouse_move mouse_press mouse_scroll], events.map(&:type)
     assert_equal :escape, events[0].key
     assert_equal 12.5, events[1].x
     assert_equal 1, events[2].button
+    assert_equal(-1.0, events[3].value)
   end
 
   test "close destroys and clears wayland window resources" do
@@ -835,7 +925,11 @@ class WaylandBackendTest < Test::Unit::TestCase
     wl_buffer.define_singleton_method(:on_release) { |&block| block }
     wl_buffer.define_singleton_method(:busy?) { false }
     wl_buffer.define_singleton_method(:destroy) { }
-    pool.define_singleton_method(:create_buffer) { |_offset, _width, _height, _stride, _format| wl_buffer }
+    format = nil
+    pool.define_singleton_method(:create_buffer) do |_offset, _width, _height, _stride, received_format|
+      format = received_format
+      wl_buffer
+    end
     shm = Object.new
     received_file = nil
     shm.define_singleton_method(:create_pool) { |file, _size| received_file = file; pool }
@@ -849,6 +943,7 @@ class WaylandBackendTest < Test::Unit::TestCase
 
     assert_equal wl_buffer, shm_buffer.wl_buffer
     assert_same tempfile, received_file
+    assert_equal :xrgb8888, format
   ensure
     tempfile.close!
   end

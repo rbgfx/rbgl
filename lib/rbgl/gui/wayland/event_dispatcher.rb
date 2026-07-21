@@ -53,13 +53,16 @@ module RBGL
         end
 
         def handle_registry_event(opcode, payload)
-          return unless opcode == 0
-
-          name = payload[0, 4].unpack1("V")
-          interface_length = payload[4, 4].unpack1("V")
-          interface = payload[8, interface_length - 1]
-          version = payload[8 + @codec.pad_length(interface_length), 4].unpack1("V")
-          @connection.store_global(interface, name: name, version: version)
+          case opcode
+          when 0
+            name = payload[0, 4].unpack1("V")
+            interface_length = payload[4, 4].unpack1("V")
+            interface = payload[8, interface_length - 1]
+            version = payload[8 + @codec.pad_length(interface_length), 4].unpack1("V")
+            @connection.store_global(interface, name: name, version: version)
+          when 1
+            @connection.remove_global(payload.unpack1("V"))
+          end
         end
 
         def handle_xdg_wm_base_event(object, opcode, payload)
@@ -71,17 +74,30 @@ module RBGL
 
         def handle_keyboard_event(keyboard, opcode, payload)
           case opcode
+          when 0
+            format, size = payload.unpack("V2")
+            keyboard.handle_keymap(format, size, @connection.consume_received_fd)
           when 1
             keyboard.focus(payload.byteslice(4, 4).unpack1("V"))
           when 2
             keyboard.blur
           when 3
             _serial, _time, keycode, state = payload.unpack("V4")
-            @connection.queue_event(
+            event = {
               type: state == 1 ? :key_press : :key_release,
               surface_id: keyboard.focused_surface_id,
               key: InputMapper.key(keycode),
               keycode: keycode
+            }
+            event[:modifiers] = keyboard.modifiers.dup unless keyboard.modifiers.empty?
+            @connection.queue_event(event)
+          when 4
+            _serial, depressed, latched, locked, group = payload.unpack("V5")
+            keyboard.handle_modifiers(
+              depressed: depressed,
+              latched: latched,
+              locked: locked,
+              group: group
             )
           end
         end
@@ -103,6 +119,16 @@ module RBGL
               type: state == 1 ? :pointer_button_press : :pointer_button_release,
               surface_id: pointer.focused_surface_id,
               button: InputMapper.button(button),
+              x: pointer.x,
+              y: pointer.y
+            )
+          when 4
+            _time, axis, value = payload.unpack("VVl<")
+            @connection.queue_event(
+              type: :pointer_axis,
+              surface_id: pointer.focused_surface_id,
+              axis: { 0 => :vertical, 1 => :horizontal }.fetch(axis, axis),
+              value: value / 256.0,
               x: pointer.x,
               y: pointer.y
             )
