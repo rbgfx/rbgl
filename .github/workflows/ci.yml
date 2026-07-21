@@ -34,7 +34,7 @@ jobs:
       - name: Run packaging smoke test
         run: |
           gem build rbgl.gemspec
-          gem install --local rbgl-*.gem
+          gem install rbgl-*.gem
           ruby -e 'require "rbgl"; puts RBGL::VERSION'
       - name: Run doctor (headless-safe)
         run: ruby exe/rbgl doctor --json
