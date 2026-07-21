@@ -23,6 +23,7 @@ module RBGL
         def run(backend:, context:, process_events:, &frame_callback)
           @running = true
           last_time = @time_source.call
+          next_frame_deadline = @frame_interval && (last_time + @frame_interval)
           @frame_times.clear
 
           while @running && !backend.should_close?
@@ -38,7 +39,8 @@ module RBGL
 
             frame_finished_at = @time_source.call
             record_frame(frame_finished_at)
-            throttle(frame_started_at, frame_finished_at)
+            throttle(next_frame_deadline, frame_finished_at)
+            next_frame_deadline += @frame_interval if next_frame_deadline
           end
         end
 
@@ -63,10 +65,10 @@ module RBGL
           @fps = elapsed.positive? ? (@frame_times.length - 1) / elapsed : 0
         end
 
-        def throttle(frame_started_at, frame_finished_at)
-          return unless @frame_interval
+        def throttle(deadline, frame_finished_at)
+          return unless deadline
 
-          remaining = @frame_interval - (frame_finished_at - frame_started_at)
+          remaining = deadline - frame_finished_at
           @sleeper.call(remaining) if remaining.positive?
         end
 
