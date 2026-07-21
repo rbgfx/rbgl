@@ -494,6 +494,15 @@ class WaylandConnectionTest < Test::Unit::TestCase
     receiver&.close
   end
 
+  test "receive_message preserves wait state for basic nonblocking sockets" do
+    socket = Object.new
+    socket.define_singleton_method(:read_nonblock) { |_length, exception:| exception ? nil : :wait_readable }
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    connection.instance_variable_set(:@socket, socket)
+
+    assert_equal :wait_readable, connection.send(:receive_message)
+  end
+
   test "pump_events receives the keyboard keymap file descriptor" do
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
     keymap_file = Tempfile.new("rbgl-wayland-keymap")

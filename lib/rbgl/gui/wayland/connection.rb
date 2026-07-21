@@ -215,7 +215,10 @@ module RBGL
 
         def receive_message
           unless @socket.respond_to?(:recvmsg_nonblock)
-            return [@socket.read_nonblock(READ_CHUNK_SIZE, exception: false), []]
+            chunk = @socket.read_nonblock(READ_CHUNK_SIZE, exception: false)
+            return :wait_readable if chunk == :wait_readable
+
+            return [chunk, []]
           end
 
           result = @socket.recvmsg_nonblock(
