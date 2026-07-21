@@ -5,21 +5,23 @@ module RBGL
     class DynamicData
       def initialize(data = {})
         @data = {}
+        @writer_keys = {}
         data.to_h.each { |key, value| self[key] = value }
       end
 
       def method_missing(name, *args)
-        if writer_method?(name)
-          self[writer_key(name)] = args.first
-        elsif args.empty? && @data.key?(normalize_key(name))
-          self[name]
+        key = normalize_key(name)
+        if args.empty? && @data.key?(key)
+          @data[key]
+        elsif (writer = writer_key(name))
+          self[writer] = args.first
         else
           super
         end
       end
 
       def respond_to_missing?(name, include_private = false)
-        writer_method?(name) || @data.key?(normalize_key(name)) || super
+        @data.key?(normalize_key(name)) || !writer_key(name).nil? || super
       end
 
       def [](key)
@@ -46,15 +48,16 @@ module RBGL
       private
 
       def normalize_key(key)
+        return key if key.is_a?(Symbol)
+
         key.to_s.chomp("=").to_sym
       end
 
-      def writer_method?(name)
-        name.to_s.end_with?("=")
-      end
-
       def writer_key(name)
-        name.to_s.chomp("=").to_sym
+        return @writer_keys[name] if @writer_keys.key?(name)
+
+        text = name.to_s
+        @writer_keys[name] = text.end_with?("=") ? text.chomp("=").to_sym : nil
       end
     end
 

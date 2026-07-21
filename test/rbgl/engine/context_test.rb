@@ -307,9 +307,9 @@ class ContextTest < Test::Unit::TestCase
     render_triangle(color: Larb::Color.new(0, 0, 1, 0.5), z: -0.1, blend_mode: :alpha)
 
     color = @ctx.framebuffer.get_pixel(50, 50)
-    assert_in_delta 0.5, color.r, 0.001
+    assert_in_delta 0.5, color.r, 1.0 / 255
     assert_in_delta 0.0, color.g, 0.001
-    assert_in_delta 0.5, color.b, 0.001
+    assert_in_delta 0.5, color.b, 1.0 / 255
   end
 
   private

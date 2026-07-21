@@ -30,6 +30,13 @@ class FramebufferTest < Test::Unit::TestCase
     assert_kind_of Larb::Color, @fb.color_buffer[0]
   end
 
+  test "stores framebuffer pixels as packed AARRGGBB integers" do
+    @fb.set_pixel(0, 0, Larb::Color.new(1.0, 0.5, 0.0, 1.0))
+
+    assert_equal 0xFFFF8000, @fb.each_packed_pixel.first
+    assert_kind_of Integer, @fb.instance_variable_get(:@pixels).first
+  end
+
   test "depth_buffer is initialized with infinity" do
     assert_equal 100, @fb.depth_buffer.size
     assert_equal Float::INFINITY, @fb.depth_buffer[0]
@@ -138,9 +145,9 @@ class FramebufferTest < Test::Unit::TestCase
     @fb.write_pixel(5, 5, blue, 0.4, blend_mode: :alpha)
 
     color = @fb.get_pixel(5, 5)
-    assert_in_delta 0.5, color.r, 0.001
+    assert_in_delta 0.5, color.r, 1.0 / 255
     assert_in_delta 0.0, color.g, 0.001
-    assert_in_delta 0.5, color.b, 0.001
+    assert_in_delta 0.5, color.b, 1.0 / 255
     assert_in_delta 1.0, color.a, 0.001
   end
 
@@ -169,12 +176,12 @@ class FramebufferTest < Test::Unit::TestCase
     assert_equal 1.0, @fb.get_depth(0, 0)
   end
 
-  test "clear safely shares immutable color objects" do
+  test "clear returns independent immutable color views" do
     red = Larb::Color.red
     @fb.clear(color: red)
 
     assert_raise(FrozenError) { @fb.get_pixel(0, 0).r = 0.25 }
-    assert_same @fb.get_pixel(0, 0), @fb.get_pixel(1, 0)
+    assert_not_same @fb.get_pixel(0, 0), @fb.get_pixel(1, 0)
     assert_not_same red, @fb.get_pixel(0, 0)
   end
 

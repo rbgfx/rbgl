@@ -15,6 +15,14 @@ class ShaderIOTest < Test::Unit::TestCase
     assert_kind_of Larb::Color, io[:color]
   end
 
+  test "keeps symbol keys unchanged on the hot access path" do
+    io = RBGL::Engine::ShaderIO.new(color: Larb::Color.red)
+    key = :color
+
+    assert_same key, io.send(:normalize_key, key)
+    assert_same io[:color], io.color
+  end
+
   test "to_h returns data copy" do
     io = RBGL::Engine::ShaderIO.new
     io[:a] = 1

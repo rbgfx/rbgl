@@ -3,7 +3,7 @@
 module RBGL
   module Engine
     class Framebuffer
-      attr_reader :width, :height, :color_buffer, :depth_buffer
+      attr_reader :width, :height, :depth_buffer
 
       def self.from_rgba_bytes(width, height, buffer)
         new(width, height).tap { |framebuffer| framebuffer.send(:load_rgba_bytes, buffer) }
@@ -12,27 +12,37 @@ module RBGL
       def initialize(width, height)
         @width = width
         @height = height
-        @color_buffer = color_buffer_filled_with(Larb::Color.black)
+        @pixels = pixel_buffer_filled_with(Larb::Color.black)
         @depth_buffer = Array.new(width * height) { Float::INFINITY }
       end
 
       def resize(width, height)
         @width = width
         @height = height
-        @color_buffer = color_buffer_filled_with(Larb::Color.black)
+        @pixels = pixel_buffer_filled_with(Larb::Color.black)
         @depth_buffer = Array.new(width * height) { Float::INFINITY }
+      end
+
+      def color_buffer
+        @pixels.map { |pixel| unpack_color(pixel) }
+      end
+
+      def each_packed_pixel(&block)
+        return @pixels.each unless block
+
+        @pixels.each(&block)
       end
 
       def get_pixel(x, y)
         return nil if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @color_buffer[(y * @width) + x]
+        unpack_color(@pixels[(y * @width) + x])
       end
 
       def set_pixel(x, y, color)
         return if x < 0 || x >= @width || y < 0 || y >= @height
 
-        @color_buffer[(y * @width) + x] = immutable_color(color)
+        @pixels[(y * @width) + x] = pack_color(color)
       end
 
       def get_depth(x, y)
@@ -53,18 +63,18 @@ module RBGL
         idx = (y * @width) + x
         return false if depth_test && depth >= @depth_buffer[idx]
 
-        @color_buffer[idx] = immutable_color(blend_color(@color_buffer[idx], color, blend_mode))
+        @pixels[idx] = blend_mode == :alpha ? blend_pixel(@pixels[idx], color) : pack_color(color)
         @depth_buffer[idx] = depth if depth_write
         true
       end
 
       def clear(color: Larb::Color.black, depth: Float::INFINITY)
-        @color_buffer.fill(immutable_color(color))
+        @pixels.fill(pack_color(color))
         @depth_buffer.fill(depth)
       end
 
       def clear_color(color)
-        @color_buffer.fill(immutable_color(color))
+        @pixels.fill(pack_color(color))
       end
 
       def clear_depth(depth = Float::INFINITY)
@@ -76,9 +86,9 @@ module RBGL
         ppm << "P3\n#{@width} #{@height}\n255\n"
         @height.times do |y|
           @width.times do |x|
-            c = @color_buffer[(y * @width) + x]
+            pixel = @pixels[(y * @width) + x]
             ppm << " " unless x.zero?
-            ppm << color_byte(c.r).to_s << " " << color_byte(c.g).to_s << " " << color_byte(c.b).to_s
+            ppm << red_byte(pixel).to_s << " " << green_byte(pixel).to_s << " " << blue_byte(pixel).to_s
           end
           ppm << "\n"
         end
@@ -110,60 +120,92 @@ module RBGL
           raise ArgumentError, "Pixel buffer size mismatch: expected #{expected_size}, got #{bytes.bytesize}"
         end
 
-        @color_buffer = Array.new(@width * @height)
+        @pixels = Array.new(@width * @height)
         pixel_index = 0
         byte_index = 0
-        while pixel_index < @color_buffer.length
-          @color_buffer[pixel_index] = ImmutableColor.new(
-            bytes.getbyte(byte_index) / 255.0,
-            bytes.getbyte(byte_index + 1) / 255.0,
-            bytes.getbyte(byte_index + 2) / 255.0,
-            bytes.getbyte(byte_index + 3) / 255.0
-          ).freeze
+        while pixel_index < @pixels.length
+          @pixels[pixel_index] = pack_bytes(
+            bytes.getbyte(byte_index),
+            bytes.getbyte(byte_index + 1),
+            bytes.getbyte(byte_index + 2),
+            bytes.getbyte(byte_index + 3)
+          )
           pixel_index += 1
           byte_index += 4
         end
       end
 
-      def blend_color(destination, source, blend_mode)
-        case blend_mode
-        when :alpha
-          alpha = source.a
-          inv_alpha = 1.0 - alpha
-          Larb::Color.new(
-            (source.r * alpha) + (destination.r * inv_alpha),
-            (source.g * alpha) + (destination.g * inv_alpha),
-            (source.b * alpha) + (destination.b * inv_alpha),
-            alpha + (destination.a * inv_alpha)
-          )
-        else
-          source
-        end
+      def blend_pixel(destination, source)
+        validate_color!(source)
+        alpha = source.a
+        inv_alpha = 1.0 - alpha
+        pack_bytes(
+          color_byte((source.r * alpha) + ((red_byte(destination) / 255.0) * inv_alpha)),
+          color_byte((source.g * alpha) + ((green_byte(destination) / 255.0) * inv_alpha)),
+          color_byte((source.b * alpha) + ((blue_byte(destination) / 255.0) * inv_alpha)),
+          color_byte(alpha + ((alpha_byte(destination) / 255.0) * inv_alpha))
+        )
       end
 
-      def immutable_color(color)
-        ImmutableColor.from(color)
+      def pack_color(color)
+        validate_color!(color)
+        pack_bytes(color_byte(color.r), color_byte(color.g), color_byte(color.b), color_byte(color.a))
       end
 
-      def color_buffer_filled_with(color)
-        Array.new(@width * @height, immutable_color(color))
+      def validate_color!(color)
+        return if color.is_a?(Larb::Color)
+
+        raise ArgumentError, "Colors must be Larb::Color values"
+      end
+
+      def pixel_buffer_filled_with(color)
+        Array.new(@width * @height, pack_color(color))
       end
 
       def packed_color_bytes(format)
         channel_count = format == :rgb ? 3 : 4
-        bytes = String.new(capacity: @color_buffer.length * channel_count, encoding: Encoding::BINARY)
+        bytes = String.new(capacity: @pixels.length * channel_count, encoding: Encoding::BINARY)
 
-        @color_buffer.each do |color|
+        @pixels.each do |pixel|
           case format
           when :rgb
-            bytes << color_byte(color.r) << color_byte(color.g) << color_byte(color.b)
+            bytes << red_byte(pixel) << green_byte(pixel) << blue_byte(pixel)
           when :rgba
-            bytes << color_byte(color.r) << color_byte(color.g) << color_byte(color.b) << color_byte(color.a)
+            bytes << red_byte(pixel) << green_byte(pixel) << blue_byte(pixel) << alpha_byte(pixel)
           when :bgra
-            bytes << color_byte(color.b) << color_byte(color.g) << color_byte(color.r) << color_byte(color.a)
+            bytes << blue_byte(pixel) << green_byte(pixel) << red_byte(pixel) << alpha_byte(pixel)
           end
         end
         bytes
+      end
+
+      def unpack_color(pixel)
+        ImmutableColor.new(
+          red_byte(pixel) / 255.0,
+          green_byte(pixel) / 255.0,
+          blue_byte(pixel) / 255.0,
+          alpha_byte(pixel) / 255.0
+        ).freeze
+      end
+
+      def pack_bytes(red, green, blue, alpha)
+        (alpha << 24) | (red << 16) | (green << 8) | blue
+      end
+
+      def alpha_byte(pixel)
+        (pixel >> 24) & 0xFF
+      end
+
+      def red_byte(pixel)
+        (pixel >> 16) & 0xFF
+      end
+
+      def green_byte(pixel)
+        (pixel >> 8) & 0xFF
+      end
+
+      def blue_byte(pixel)
+        pixel & 0xFF
       end
 
       def color_byte(value)
