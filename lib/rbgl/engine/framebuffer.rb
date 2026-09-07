@@ -10,17 +10,18 @@ module RBGL
       end
 
       def initialize(width, height)
-        @width = width
-        @height = height
-        @pixels = pixel_buffer_filled_with(Larb::Color.black)
-        @depth_buffer = Array.new(width * height) { Float::INFINITY }
+        resize(width, height)
       end
 
       def resize(width, height)
+        validate_dimensions!(width, height)
+        pixels = Array.new(width * height, pack_color(Larb::Color.black))
+        depth_buffer = Array.new(width * height) { Float::INFINITY }
+
         @width = width
         @height = height
-        @pixels = pixel_buffer_filled_with(Larb::Color.black)
-        @depth_buffer = Array.new(width * height) { Float::INFINITY }
+        @pixels = pixels
+        @depth_buffer = depth_buffer
       end
 
       def color_buffer
@@ -59,6 +60,7 @@ module RBGL
 
       def write_pixel(x, y, color, depth, depth_test: true, depth_write: true, blend_mode: :none)
         return false if x < 0 || x >= @width || y < 0 || y >= @height
+        return false unless depth.is_a?(Numeric) && depth.real? && depth.finite?
 
         idx = (y * @width) + x
         return false if depth_test && depth >= @depth_buffer[idx]
@@ -111,6 +113,12 @@ module RBGL
 
       private
 
+      def validate_dimensions!(width, height)
+        return if width.is_a?(Integer) && width.positive? && height.is_a?(Integer) && height.positive?
+
+        raise ArgumentError, "Framebuffer dimensions must be positive integers"
+      end
+
       def load_rgba_bytes(buffer)
         bytes = String.try_convert(buffer)
         raise ArgumentError, "Pixel buffer must be a String" unless bytes
@@ -156,10 +164,6 @@ module RBGL
         return if color.is_a?(Larb::Color)
 
         raise ArgumentError, "Colors must be Larb::Color values"
-      end
-
-      def pixel_buffer_filled_with(color)
-        Array.new(@width * @height, pack_color(color))
       end
 
       def packed_color_bytes(format)

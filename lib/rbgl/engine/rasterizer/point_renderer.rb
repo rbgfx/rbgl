@@ -12,8 +12,8 @@ module RBGL
 
         def rasterize(vertex, fragment_shader, uniforms, state)
           point = @viewport_transform.call(vertex[:position])
-          x = point.x.round
-          y = point.y.round
+          x = point.x.floor
+          y = point.y.floor
           depth = point.z
           x_offsets, y_offsets = @point_pixel_offsets.call(state[:size])
           frag_output = fragment_shader.process(vertex, uniforms)

@@ -56,6 +56,20 @@ class FramebufferTest < Test::Unit::TestCase
     assert_equal 0.0, @fb.get_pixel(0, 0).r
   end
 
+  test "rejects invalid dimensions without changing existing buffers" do
+    original_pixels = @fb.to_rgba_bytes
+    original_depth = @fb.depth_buffer.dup
+
+    [[0, 1], [-1, 1], [1.5, 1]].each do |width, height|
+      assert_raise(ArgumentError) { @fb.resize(width, height) }
+    end
+
+    assert_equal [10, 10], [@fb.width, @fb.height]
+    assert_equal original_pixels, @fb.to_rgba_bytes
+    assert_equal original_depth, @fb.depth_buffer
+    assert_raise(ArgumentError) { RBGL::Engine::Framebuffer.new(-2, -2) }
+  end
+
   test "get_pixel returns color at position" do
     color = @fb.get_pixel(0, 0)
     assert_kind_of Larb::Color, color
@@ -115,6 +129,17 @@ class FramebufferTest < Test::Unit::TestCase
     result = @fb.write_pixel(5, 5, blue, 0.6)
     assert_false result
     assert_equal red.to_a, @fb.get_pixel(5, 5).to_a
+  end
+
+  test "write_pixel rejects non-finite fragment depth" do
+    red = Larb::Color.red
+    blue = Larb::Color.blue
+    @fb.write_pixel(5, 5, red, 0.1)
+
+    assert_false @fb.write_pixel(5, 5, blue, Float::NAN, depth_test: false)
+
+    assert_equal red.to_a, @fb.get_pixel(5, 5).to_a
+    assert_equal 0.1, @fb.get_depth(5, 5)
   end
 
   test "write_pixel can disable depth test" do

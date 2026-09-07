@@ -13,6 +13,10 @@ module RBGL
         def rasterize(v0, v1, fragment_shader, uniforms, state)
           p0 = @viewport_transform.call(v0[:position])
           p1 = @viewport_transform.call(v1[:position])
+          if ([p0.x, p0.y, p0.z] <=> [p1.x, p1.y, p1.z]).positive?
+            p0, p1 = p1, p0
+            v0, v1 = v1, v0
+          end
 
           x0 = p0.x.round
           y0 = p0.y.round
@@ -24,7 +28,9 @@ module RBGL
           sx = x0 < x1 ? 1 : -1
           sy = y0 < y1 ? 1 : -1
           err = dx + dy
-          total_dist = Math.sqrt(((x1 - x0)**2) + ((y1 - y0)**2))
+          line_dx = p1.x - p0.x
+          line_dy = p1.y - p0.y
+          line_length_squared = (line_dx * line_dx) + (line_dy * line_dy)
           inverse_w0 = @interpolator.inverse_clip_w(v0[:position])
           inverse_w1 = @interpolator.inverse_clip_w(v1[:position])
           interpolation_plan = @interpolator.prepare([v0, v1])
@@ -32,7 +38,7 @@ module RBGL
           fragment_output = ShaderIO.new
 
           loop do
-            t = interpolation_factor(x0, y0, p0, total_dist)
+            t = interpolation_factor(x0, y0, p0, line_dx, line_dy, line_length_squared)
             corrected_w0 = (1.0 - t) * inverse_w0
             corrected_w1 = t * inverse_w1
             total = corrected_w0 + corrected_w1
@@ -60,9 +66,11 @@ module RBGL
 
         private
 
-        def interpolation_factor(x, y, start_point, total_dist)
-          current_dist = Math.sqrt(((x - start_point.x.round)**2) + ((y - start_point.y.round)**2))
-          total_dist.positive? ? current_dist / total_dist : 0.0
+        def interpolation_factor(x, y, start_point, line_dx, line_dy, line_length_squared)
+          return 0.0 unless line_length_squared.positive?
+
+          (((x - start_point.x) * line_dx) + ((y - start_point.y) * line_dy))
+            .fdiv(line_length_squared).clamp(0.0, 1.0)
         end
 
         def shade_fragment(x, y, depth, attributes, fragment_shader, uniforms, state, fragment_output)

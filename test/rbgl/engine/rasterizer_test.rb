@@ -93,6 +93,27 @@ class RasterizerTest < Test::Unit::TestCase
     assert_in_delta 0.5, @fb.get_depth(50, 50), 1e-10
   end
 
+  test "rasterize_line interpolation is independent of endpoint order" do
+    framebuffer = RBGL::Engine::Framebuffer.new(5, 2)
+    rasterizer = RBGL::Engine::Rasterizer.new(framebuffer)
+    rasterizer.viewport = { x: 0, y: 0, width: 4, height: 2 }
+    v0 = create_vertex(-1.0, 1.0, -1.0)
+    v0[:weight] = 0.0
+    v1 = create_vertex(1.0, 0.0, 1.0)
+    v1[:weight] = 1.0
+    shader = RBGL::Engine::FragmentShader.new do |input, _uniforms, output|
+      output.color = Larb::Color.new(input[:weight], 0, 0, 1)
+    end
+
+    rasterizer.rasterize_line(v0, v1, shader, @uniforms)
+    forward = [framebuffer.get_pixel(1, 0).r, framebuffer.get_depth(1, 0)]
+    framebuffer.clear
+    rasterizer.rasterize_line(v1, v0, shader, @uniforms)
+    reverse = [framebuffer.get_pixel(1, 0).r, framebuffer.get_depth(1, 0)]
+
+    assert_equal forward, reverse
+  end
+
   test "rasterize_triangle interpolates depth in screen space" do
     framebuffer = RBGL::Engine::Framebuffer.new(4, 4)
     rasterizer = RBGL::Engine::Rasterizer.new(framebuffer)
@@ -137,6 +158,15 @@ class RasterizerTest < Test::Unit::TestCase
 
     center_color = @fb.get_pixel(50, 50)
     assert_equal 1.0, center_color.r
+  end
+
+  test "rasterize_point draws the center of a one-pixel framebuffer" do
+    framebuffer = RBGL::Engine::Framebuffer.new(1, 1)
+    rasterizer = RBGL::Engine::Rasterizer.new(framebuffer)
+
+    rasterizer.rasterize_point(create_vertex(0.0, 0.0, 0.0), @fragment_shader, @uniforms)
+
+    assert_equal Larb::Color.red.to_a, framebuffer.get_pixel(0, 0).to_a
   end
 
   test "rasterize_point with size draws larger point" do
