@@ -72,7 +72,7 @@ module RBGL
       def clamp(v, min_val, max_val)
         case v
         when Numeric then v.clamp(min_val, max_val)
-        when Larb::Color then v.clamp
+        when Larb::Color then Larb::Color.new(*v.to_a.map { |component| component.clamp(min_val, max_val) })
         else
           component_map(v) { |component| component.clamp(min_val, max_val) }
         end
@@ -86,7 +86,7 @@ module RBGL
         component_ternary_map(edge0, edge1, x) do |e0, e1, value|
           next value < e0 ? 0.0 : 1.0 if e0 == e1
 
-          t = ((value - e0) / (e1 - e0)).clamp(0.0, 1.0)
+          t = (value - e0).fdiv(e1 - e0).clamp(0.0, 1.0)
           t * t * (3.0 - (2.0 * t))
         end
       end

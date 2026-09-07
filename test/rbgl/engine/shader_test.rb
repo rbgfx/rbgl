@@ -245,6 +245,13 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 1.0, c.a
   end
 
+  test "clamp applies explicit bounds to colors" do
+    color = clamp(Larb::Color.new(0.1, 0.9, 0.5, 1.0), 0.25, 0.75)
+
+    assert_in_delta 0.25, color.r, 1e-10
+    assert_in_delta 0.75, color.g, 1e-10
+  end
+
   test "saturate clamps to 0-1" do
     assert_equal 0.0, saturate(-1.0)
     assert_equal 1.0, saturate(2.0)
@@ -254,6 +261,10 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 0.0, smoothstep(0.0, 1.0, 0.0)
     assert_equal 1.0, smoothstep(0.0, 1.0, 1.0)
     assert_in_delta 0.5, smoothstep(0.0, 1.0, 0.5), 0.01
+  end
+
+  test "smoothstep uses floating point division for integer inputs" do
+    assert_in_delta 0.5, smoothstep(0, 2, 1), 1e-10
   end
 
   test "smoothstep handles equal edges without producing NaN" do
