@@ -29,6 +29,8 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+      - name: Rebuild CPU-specific dependency
+        run: bundle pristine larb
       - name: Run tests
         run: bundle exec rake test
       - name: Run packaging smoke test
@@ -64,6 +66,8 @@ jobs:
         with:
           ruby-version: "3.4"
           bundler-cache: true
+      - name: Rebuild CPU-specific dependency
+        run: bundle pristine larb
       - name: Smoke test X11 through Xvfb
         run: xvfb-run --auto-servernum env RBGL_SMOKE_BACKEND=x11 bundle exec ruby test/integration/native_backend_smoke.rb
       - name: Smoke test Wayland through headless Weston

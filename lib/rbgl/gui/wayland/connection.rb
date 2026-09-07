@@ -229,7 +229,7 @@ module RBGL
             exception: false
           )
           return :wait_readable if result == :wait_readable
-          return [nil, []] unless result
+          return [nil, []] if !result || result[0].empty?
 
           [result[0], result.drop(3)]
         end
