@@ -34,7 +34,13 @@ module RBGL
 
         def pending
           read_available
-          @read_buffer.empty? ? 0 : 1
+          return 0 if @read_buffer.bytesize < 32
+
+          packet_size = 32
+          if @read_buffer.getbyte(0) == 1
+            packet_size += @read_buffer.byteslice(4, 4).unpack1("V") * 4
+          end
+          @read_buffer.bytesize >= packet_size ? 1 : 0
         end
 
         def close

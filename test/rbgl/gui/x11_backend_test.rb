@@ -141,16 +141,37 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal 1, socket.flush_count
   end
 
-  test "pending returns whether the socket is readable" do
+  test "pending reports complete X11 packets" do
     reader, writer = IO.pipe
     connection = build_connection(socket: reader)
+    event = "\x00" * 32
+    event.setbyte(0, 12)
 
-    writer.write("x")
+    writer.write(event)
     writer.flush
     assert_equal 1, connection.pending
 
-    connection.instance_variable_get(:@transport).read_exact(1)
+    assert_equal({ type: :exposure }, connection.next_event)
     assert_equal 0, connection.pending
+  ensure
+    reader&.close unless reader&.closed?
+    writer&.close unless writer&.closed?
+  end
+
+  test "pending retains partial X11 packets without blocking" do
+    reader, writer = IO.pipe
+    connection = build_connection(socket: reader)
+    event = "\x00" * 32
+    event.setbyte(0, 12)
+
+    writer.write(event.byteslice(0, 1))
+    writer.flush
+    assert_equal 0, connection.pending
+
+    writer.write(event.byteslice(1..))
+    writer.flush
+    assert_equal 1, connection.pending
+    assert_equal({ type: :exposure }, connection.next_event)
   ensure
     reader&.close unless reader&.closed?
     writer&.close unless writer&.closed?
@@ -610,13 +631,30 @@ class X11ConnectionTest < Test::Unit::TestCase
 
     writer.write("hello")
     writer.flush
-    assert_equal 1, transport.pending
+    assert_equal 0, transport.pending
 
     writer.write("!!!")
     writer.flush
 
     assert_equal "hello!!!", transport.read_exact(8)
     assert_equal 0, transport.pending
+  ensure
+    reader&.close unless reader&.closed?
+    writer&.close unless writer&.closed?
+  end
+
+  test "transport waits for a complete X11 reply payload" do
+    reader, writer = IO.pipe
+    transport = RBGL::GUI::X11::Transport.new(reader)
+    reply = "\x01" + ("\x00" * 3) + [1].pack("V") + ("\x00" * 24)
+
+    writer.write(reply)
+    writer.flush
+    assert_equal 0, transport.pending
+
+    writer.write("data")
+    writer.flush
+    assert_equal 1, transport.pending
   ensure
     reader&.close unless reader&.closed?
     writer&.close unless writer&.closed?
