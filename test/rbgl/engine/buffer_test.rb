@@ -51,12 +51,17 @@ class VertexLayoutTest < Test::Unit::TestCase
     assert_equal :color, layout.attributes[:color].kind
   end
 
-  test "updates stride when attributes are added after initialization" do
+  test "keeps buffer stride consistent when attributes are added after initialization" do
     layout = RBGL::Engine::VertexLayout.new { attribute :position, 1 }
 
     layout.attribute(:weight, 1)
+    buffer = RBGL::Engine::VertexBuffer.from_array(
+      layout,
+      [{ position: 10, weight: 20 }, { position: 30, weight: 40 }]
+    )
 
     assert_equal 2, layout.stride
+    assert_equal({ position: 30.0, weight: 40.0 }, buffer.get_vertex(1))
   end
 
   test "does not expose mutable attribute definitions" do
