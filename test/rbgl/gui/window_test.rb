@@ -451,6 +451,27 @@ class WindowRunTest < Test::Unit::TestCase
     assert_in_delta 0.005, sleeps[2], 0.0001
   end
 
+  test "render loop resets an expired deadline after a slow frame" do
+    now = 0.0
+    sleeps = []
+    render_loop = RBGL::GUI::Window::RenderLoop.new(
+      time_source: -> { now },
+      sleeper: ->(duration) { sleeps << duration; now += duration },
+      target_fps: 100
+    )
+    backend = MockLoopBackend.new(100, 100, max_frames: 3)
+    context = RBGL::Engine::Context.new(width: 100, height: 100)
+    frame = 0
+
+    render_loop.run(backend: backend, context: context, process_events: -> {}) do
+      now += frame.zero? ? 1.0 : 0.002
+      frame += 1
+    end
+
+    assert_equal 2, sleeps.length
+    assert_in_delta 0.008, sleeps.first, 0.0001
+  end
+
   test "fps reports a moving one second window" do
     times = [0.0, 0.0, 0.01, 0.1, 0.11, 1.2, 1.21, 1.3, 1.31]
     render_loop = RBGL::GUI::Window::RenderLoop.new(

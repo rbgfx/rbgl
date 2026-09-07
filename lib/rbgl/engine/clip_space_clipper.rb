@@ -14,6 +14,9 @@ module RBGL
 
       def clip(v0, v1, v2)
         polygon = [v0, v1, v2]
+        outcodes = polygon.map { |vertex| outcode(vertex) }
+        return [polygon] if outcodes.reduce(:|).zero?
+        return [] unless outcodes.reduce(:&).zero?
 
         CLIP_PLANES.each do |plane|
           polygon = clip_against_plane(polygon, plane)
@@ -125,6 +128,12 @@ module RBGL
 
       def signed_distance(vertex, plane)
         plane.call(clip_position(vertex))
+      end
+
+      def outcode(vertex)
+        CLIP_PLANES.each_with_index.reduce(0) do |code, (plane, index)|
+          signed_distance(vertex, plane).negative? ? code | (1 << index) : code
+        end
       end
 
       def clip_position(vertex)

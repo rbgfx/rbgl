@@ -240,6 +240,19 @@ class ContextTest < Test::Unit::TestCase
     })
   end
 
+  test "clip_triangle returns fully visible vertices without copying" do
+    vertices = [
+      shader_vertex(Larb::Vec4.new(-0.5, 0.0, 0.0, 1.0)),
+      shader_vertex(Larb::Vec4.new(0.5, 0.0, 0.0, 1.0)),
+      shader_vertex(Larb::Vec4.new(0.0, 0.5, 0.0, 1.0))
+    ]
+
+    clipped = @ctx.send(:clip_triangle, *vertices)
+
+    assert_equal 1, clipped.size
+    vertices.each_with_index { |vertex, index| assert_same vertex, clipped.first[index] }
+  end
+
   test "clip_line keeps partially visible lines and returns clipped segment" do
     v0 = shader_vertex(Larb::Vec4.new(-1.5, 0.0, 0.0, 1.0))
     v1 = shader_vertex(Larb::Vec4.new(0.5, 0.0, 0.0, 1.0))

@@ -40,7 +40,7 @@ module RBGL
             frame_finished_at = @time_source.call
             record_frame(frame_finished_at)
             throttle(next_frame_deadline, frame_finished_at)
-            next_frame_deadline += @frame_interval if next_frame_deadline
+            next_frame_deadline = advance_deadline(next_frame_deadline, frame_finished_at)
           end
         end
 
@@ -70,6 +70,12 @@ module RBGL
 
           remaining = deadline - frame_finished_at
           @sleeper.call(remaining) if remaining.positive?
+        end
+
+        def advance_deadline(deadline, frame_finished_at)
+          return unless deadline
+
+          [deadline, frame_finished_at].max + @frame_interval
         end
 
         def validate_target_fps(target_fps)
