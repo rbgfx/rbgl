@@ -105,10 +105,10 @@ module RBGL
       end
 
       def apply_resize(event)
+        @backend.resize(event.width, event.height)
+        @context.resize(width: event.width, height: event.height)
         @width = event.width
         @height = event.height
-        @context.resize(width: event.width, height: event.height)
-        @backend.resize(event.width, event.height)
       end
 
       def validate_event_handler!(event_type, block)

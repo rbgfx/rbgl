@@ -630,4 +630,15 @@ class WindowRunTest < Test::Unit::TestCase
     assert_equal [[320, 240]], backend.resize_calls
     assert_equal [320, 240, 320, 240], callback_dims
   end
+
+  test "failed backend resize leaves window and context dimensions unchanged" do
+    backend = SpyWindowBackend.new(100, 100)
+    backend.poll_events_result = [RBGL::GUI::Event.new(:resize, width: 320, height: 240)]
+    backend.define_singleton_method(:resize) { |_width, _height| raise "allocation failed" }
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    assert_raise(RuntimeError) { window.send(:process_events) }
+    assert_equal [100, 100], [window.width, window.height]
+    assert_equal [100, 100], [window.context.width, window.context.height]
+  end
 end

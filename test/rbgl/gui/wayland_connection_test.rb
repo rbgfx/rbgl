@@ -826,6 +826,21 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_equal 200, backend.height
   end
 
+  test "failed resize preserves wayland dimensions and buffers" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    old_buffer = Object.new
+    window = { buffers: [old_buffer], shm_buffer: old_buffer, width: 100, height: 80 }
+    backend.instance_variable_set(:@window, window)
+    backend.instance_variable_set(:@width, 100)
+    backend.instance_variable_set(:@height, 80)
+    backend.define_singleton_method(:create_shm_buffers) { |_width, _height| raise "allocation failed" }
+
+    assert_raise(RuntimeError) { backend.resize(320, 200) }
+    assert_equal [100, 80], [backend.width, backend.height]
+    assert_equal [100, 80], [window[:width], window[:height]]
+    assert_equal [old_buffer], window[:buffers]
+  end
+
   test "present uses the next available shm buffer" do
     backend = RBGL::GUI::Wayland::Backend.allocate
     framebuffer = RBGL::Engine::Framebuffer.new(2, 2)
