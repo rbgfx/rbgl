@@ -101,7 +101,8 @@ end
 
 Supported portable event types include `:key_press`, `:key_release`, `:mouse_press`, `:mouse_release`, `:mouse_move`, `:resize`, and `:close`.
 
-`Window#poll_events_raw` returns these normalized events as hashes when a manual loop is more convenient.
+`Window#poll_events_raw` returns these normalized events as hashes when a manual loop is more convenient. Resize events
+update the window, context, and backend dimensions without invoking registered event handlers.
 
 ## Raw RGBA pixels
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed perspective depth interpolation, shared-edge coverage, NPOT mipmaps, repeat filtering, and shader numeric edge cases.
+- Fixed native window resize, close, and Wayland disconnect handling, including internal size synchronization during raw event polling.
+- Tightened vertex layout, index, draw-range, and texture data mutation contracts, and skipped unnecessary clipping and expired frame deadlines.
+
 ## 1.0.0 - 2026-04-05
 
 - Removed the legacy `Window#on_key`, `Window#on_mouse`, and `Window#on_resize` aliases. Register handlers with `window.on(:key_press)`, `window.on(:mouse_move)`, `window.on(:resize)`, and the other event types directly.
