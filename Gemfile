@@ -4,7 +4,10 @@ source "https://rubygems.org"
 
 gemspec
 
+gem "benchmark", "~> 0.5"
 gem "rake"
+gem "rlsl", "~> 1.0"
+gem "rubocop", "~> 1.88"
 gem "test-unit"
 gem "simplecov", require: false
 
