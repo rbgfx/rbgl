@@ -10,13 +10,13 @@ Gem::Specification.new do |spec|
 
   spec.summary = "RuBy Graphics Library - Pure Ruby software rendering with cross-platform GUI"
   spec.description = "A pure Ruby graphics library with software rendering engine and cross-platform GUI support (X11, Wayland, Cocoa)."
-  spec.homepage = "https://github.com/ydah/rbgl"
+  spec.homepage = "https://rbgfx.github.io/rbgl/"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = spec.homepage
-  spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
+  spec.metadata["source_code_uri"] = "https://github.com/rbgfx/rbgl"
+  spec.metadata["changelog_uri"] = "https://github.com/rbgfx/rbgl/blob/main/CHANGELOG.md"
 
   gemspec = File.basename(__FILE__)
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|

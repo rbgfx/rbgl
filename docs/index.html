@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="RBGL is a pure Ruby software renderer with native and headless backends.">
+    <meta name="theme-color" content="#0f172a">
+    <meta property="og:title" content="RBGL — Pure Ruby graphics">
+    <meta property="og:description" content="Build a graphics pipeline, shade pixels, and open native windows without leaving Ruby.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://rbgfx.github.io/rbgl/">
+    <link rel="canonical" href="https://rbgfx.github.io/rbgl/">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+    <title>RBGL — Pure Ruby graphics</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+        --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 font-sans text-slate-950 antialiased selection:bg-blue-200">
+    <a class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-white focus:px-4 focus:py-2 focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-600" href="#main">
+      Skip to content
+    </a>
+
+    <header class="border-b border-slate-200 bg-slate-50">
+      <nav class="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8" aria-label="Primary navigation">
+        <a class="rounded-sm text-xl font-extrabold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-4" href="#main">RBGL</a>
+        <div class="flex items-center gap-5 text-sm font-semibold sm:gap-8">
+          <a class="hidden rounded-sm text-slate-600 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-4 sm:inline" href="#pipeline">Pipeline</a>
+          <a class="hidden rounded-sm text-slate-600 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-4 sm:inline" href="https://github.com/rbgfx/rbgl#quick-start">Guide</a>
+          <a class="rounded-md bg-slate-950 px-4 py-2.5 text-white shadow-sm hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-4" href="https://github.com/rbgfx/rbgl">View source</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="mx-auto grid max-w-7xl items-center gap-12 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-2 lg:gap-20 lg:py-32">
+        <div>
+          <p class="mb-5 text-sm font-semibold text-blue-700">A software renderer written for Ruby</p>
+          <h1 class="max-w-xl text-balance text-5xl font-extrabold leading-none sm:text-6xl lg:text-7xl">
+            Graphics, one pixel at a time—in Ruby.
+          </h1>
+          <p class="mt-7 max-w-xl text-pretty text-lg leading-8 text-slate-600">
+            Build a graphics pipeline, shade pixels, and open native windows without leaving the language you already know.
+          </p>
+          <div class="mt-9 flex flex-col gap-3 sm:flex-row">
+            <a class="rounded-md bg-blue-600 px-5 py-3 text-center font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-4" href="https://github.com/rbgfx/rbgl#installation">Install RBGL</a>
+            <a class="rounded-md border border-slate-300 bg-white px-5 py-3 text-center font-semibold text-slate-900 shadow-sm hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-4" href="https://rubygems.org/gems/rbgl">View on RubyGems</a>
+          </div>
+          <div class="mt-8 flex items-center gap-3 font-mono text-sm text-slate-600">
+            <span class="select-none text-blue-700" aria-hidden="true">$</span>
+            <code>gem install rbgl</code>
+          </div>
+        </div>
+
+        <figure class="overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-xl" aria-labelledby="viewport-title">
+          <figcaption id="viewport-title" class="flex items-center justify-between border-b border-slate-700 px-5 py-4 text-sm text-slate-300">
+            <span>Framebuffer · 320 × 240</span>
+            <span class="font-mono tabular-nums text-sky-100">60 fps</span>
+          </figcaption>
+          <svg class="block aspect-[4/3] w-full" viewBox="0 0 640 480" role="img" aria-labelledby="render-title render-description">
+            <title id="render-title">A triangle rendered into a pixel framebuffer</title>
+            <desc id="render-description">A blue pixelated triangle on a dark grid, representing RBGL software rasterization.</desc>
+            <g stroke="#334155" stroke-width="1" opacity="0.65">
+              <path d="M80 0V480M160 0V480M240 0V480M320 0V480M400 0V480M480 0V480M560 0V480"/>
+              <path d="M0 60H640M0 120H640M0 180H640M0 240H640M0 300H640M0 360H640M0 420H640"/>
+            </g>
+            <g fill="#2563eb">
+              <rect x="300" y="90" width="40" height="40"/>
+              <rect x="260" y="130" width="120" height="40"/>
+              <rect x="240" y="170" width="160" height="40"/>
+              <rect x="200" y="210" width="240" height="40"/>
+              <rect x="180" y="250" width="280" height="40"/>
+              <rect x="140" y="290" width="360" height="40"/>
+              <rect x="120" y="330" width="400" height="40"/>
+            </g>
+            <path d="M320 90L120 370H520Z" fill="none" stroke="#bae6fd" stroke-width="3"/>
+            <g fill="#e0f2fe" stroke="#0f172a" stroke-width="4">
+              <circle cx="320" cy="90" r="9"/><circle cx="120" cy="370" r="9"/><circle cx="520" cy="370" r="9"/>
+            </g>
+          </svg>
+          <div class="border-t border-slate-700 px-5 py-4 font-mono text-sm text-slate-300">
+            <span class="text-sky-100">context</span>.draw_arrays(<span class="text-sky-100">:triangles</span>, 0, 3)
+          </div>
+        </figure>
+      </section>
+
+      <section class="border-y border-slate-200 bg-white" aria-label="Project facts">
+        <dl class="mx-auto grid max-w-7xl divide-y divide-slate-200 px-5 sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:px-8">
+          <div class="py-7 sm:px-8 sm:first:pl-0"><dt class="text-sm text-slate-500">Runtime</dt><dd class="mt-1 font-semibold tabular-nums">Ruby 3.1+</dd></div>
+          <div class="py-7 sm:px-8"><dt class="text-sm text-slate-500">Window backends</dt><dd class="mt-1 font-semibold tabular-nums">Cocoa, Wayland, X11</dd></div>
+          <div class="py-7 sm:px-8 sm:last:pr-0"><dt class="text-sm text-slate-500">Headless output</dt><dd class="mt-1 font-semibold">PPM and BMP</dd></div>
+        </dl>
+      </section>
+
+      <section id="pipeline" class="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28">
+        <div class="grid gap-10 lg:grid-cols-3 lg:gap-16">
+          <div>
+            <h2 class="text-balance text-3xl font-bold sm:text-4xl">A graphics pipeline you can read.</h2>
+            <p class="mt-5 text-pretty leading-7 text-slate-600">RBGL keeps the rendering path visible. Define vertices and shaders in Ruby, then inspect the framebuffer as ordinary data.</p>
+          </div>
+          <ol class="grid border-y border-slate-300 sm:grid-cols-2 lg:col-span-2">
+            <li class="border-b border-slate-300 py-6 sm:border-r sm:px-6"><strong class="block">Vertex data</strong><span class="mt-2 block text-sm leading-6 text-slate-600">Typed layouts for positions, colors, normals, and UVs.</span></li>
+            <li class="border-b border-slate-300 py-6 sm:px-6"><strong class="block">Ruby shaders</strong><span class="mt-2 block text-sm leading-6 text-slate-600">Vertex and fragment stages expressed as Ruby blocks.</span></li>
+            <li class="border-b border-slate-300 py-6 sm:border-b-0 sm:border-r sm:px-6"><strong class="block">Rasterization</strong><span class="mt-2 block text-sm leading-6 text-slate-600">Triangles, lines, points, depth testing, and alpha blending.</span></li>
+            <li class="py-6 sm:px-6"><strong class="block">Present or export</strong><span class="mt-2 block text-sm leading-6 text-slate-600">Show a native window or write frames in headless CI.</span></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="bg-slate-950 text-white">
+        <div class="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 sm:py-28 lg:grid-cols-2 lg:gap-20">
+          <div>
+            <h2 class="text-balance text-3xl font-bold sm:text-4xl">The frame loop stays Ruby.</h2>
+            <p class="mt-5 max-w-lg text-pretty leading-7 text-slate-300">The same drawing code can render to a file on a CI runner or open a native window on macOS and Linux.</p>
+            <a class="mt-8 inline-flex rounded-md bg-white px-5 py-3 font-semibold text-slate-950 shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-4 focus:ring-offset-slate-950" href="https://github.com/rbgfx/rbgl#quick-start">Read the quick start</a>
+          </div>
+          <pre class="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-6 text-sm leading-7 text-slate-300 shadow-lg" aria-label="RBGL quick start code"><code><span class="text-sky-100">require</span> "rbgl"
+
+window = RBGL::GUI::Window.new(
+  width: <span class="text-sky-100">800</span>, height: <span class="text-sky-100">600</span>,
+  backend: <span class="text-sky-100">:auto</span>
+)
+
+window.run do |context, _delta_time|
+  context.clear(color: Color.from_hex("#0f172a"))
+  context.bind_pipeline(pipeline)
+  context.bind_vertex_buffer(vertices)
+  context.draw_arrays(<span class="text-sky-100">:triangles</span>, 0, 3)
+end</code></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-slate-200 bg-white">
+      <div class="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-8 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+        <p>RBGL is open source under the MIT License.</p>
+        <div class="flex gap-6 font-semibold">
+          <a class="rounded-sm hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-4" href="https://github.com/rbgfx/rbgl">GitHub</a>
+          <a class="rounded-sm hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-4" href="https://rubygems.org/gems/rbgl">RubyGems</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
