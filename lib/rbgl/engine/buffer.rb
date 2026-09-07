@@ -96,7 +96,7 @@ module RBGL
     end
 
     class VertexLayout
-      attr_reader :attributes, :stride
+      attr_reader :stride
 
       def initialize(&block)
         @attributes = {}
@@ -115,6 +115,10 @@ module RBGL
         @attributes[key] = VertexAttribute.new(key, size, @offset, kind: kind)
         @offset += size
         @stride = @offset
+      end
+
+      def attributes
+        @finalized ? @attributes : @attributes.dup.freeze
       end
 
       def finalize!

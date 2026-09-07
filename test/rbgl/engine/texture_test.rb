@@ -217,6 +217,15 @@ class TextureTest < Test::Unit::TestCase
     assert_in_delta 1.0 / 3.0, color.r, 1e-10
   end
 
+  test "mipmap area bounds do not exceed odd source dimensions" do
+    tex = RBGL::Engine::Texture.solid(27, 29, Larb::Color.red)
+
+    tex.generate_mipmaps!
+    color = tex.sample(0.5, 0.5, lod: 100)
+
+    assert_equal Larb::Color.red.to_a, color.to_a
+  end
+
   test "checker creates checkerboard texture" do
     tex = RBGL::Engine::Texture.checker(8, 8, 2)
     assert_equal 8, tex.width

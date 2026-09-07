@@ -53,6 +53,16 @@ class VertexLayoutTest < Test::Unit::TestCase
     assert_equal 2, layout.stride
   end
 
+  test "does not expose mutable attribute definitions" do
+    layout = RBGL::Engine::VertexLayout.new { attribute :position, 1 }
+    attributes = layout.attributes
+
+    assert_raise(FrozenError) do
+      attributes[:weight] = RBGL::Engine::VertexAttribute.new(:weight, 1, 1)
+    end
+    assert_equal [:position], layout.attributes.keys
+  end
+
   test "rejects duplicate attribute names" do
     assert_raise(ArgumentError) do
       RBGL::Engine::VertexLayout.new do

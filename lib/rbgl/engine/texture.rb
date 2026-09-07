@@ -296,9 +296,9 @@ module RBGL
           x = index % target_width
           y = index / target_width
           start_x = x * source_width.fdiv(target_width)
-          end_x = (x + 1) * source_width.fdiv(target_width)
+          end_x = x == target_width - 1 ? source_width.to_f : (x + 1) * source_width.fdiv(target_width)
           start_y = y * source_height.fdiv(target_height)
-          end_y = (y + 1) * source_height.fdiv(target_height)
+          end_y = y == target_height - 1 ? source_height.to_f : (y + 1) * source_height.fdiv(target_height)
           average_texel_area(source_data, source_width, start_x, end_x, start_y, end_y)
         end
       end
