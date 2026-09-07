@@ -184,10 +184,12 @@ module RBGL
       end
 
       def draw_point(v)
-        return unless v && point_visible?(v)
+        return unless v
+        clipped = @clipper.clip_point(v)
+        return unless clipped
 
         @rasterizer.rasterize_point(
-          v,
+          clipped,
           @pipeline.fragment_shader,
           @uniforms,
           depth_test: @pipeline.depth_test,

@@ -104,6 +104,21 @@ class ContextTest < Test::Unit::TestCase
     @ctx.draw_arrays(:points, 0, 1)
   end
 
+  test "draw_arrays supports Vec2 clip positions" do
+    layout = RBGL::Engine::VertexLayout.new do
+      attribute :position, 2
+      attribute :color, 4
+    end
+    vertices = RBGL::Engine::VertexBuffer.new(layout)
+    vertices.add_vertex(position: Larb::Vec2.new(0, 0), color: Larb::Color.white)
+    @ctx.bind_pipeline(@pipeline)
+    @ctx.bind_vertex_buffer(vertices)
+
+    @ctx.draw_arrays(:points, 0, 1)
+
+    assert_equal Larb::Color.white.to_a, @ctx.framebuffer.get_pixel(50, 50).to_a
+  end
+
   test "draw_arrays with triangle_strip mode" do
     setup_quad_strip
     @ctx.draw_arrays(:triangle_strip, 0, 4)

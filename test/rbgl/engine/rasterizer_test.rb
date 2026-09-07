@@ -216,6 +216,7 @@ class RasterizerTest < Test::Unit::TestCase
       [0.25, 0.25, 0.5]
     )
     numeric = @interpolator.interpolate_values([1.0, 3.0, 5.0], [0.25, 0.25, 0.5])
+    numeric_array = @interpolator.interpolate_values([[0.0, 2.0], [2.0, 4.0], [4.0, 6.0]], [0.25, 0.25, 0.5])
     passthrough = Object.new
     same_object = @interpolator.interpolate_values([passthrough, Object.new, Object.new], [0.25, 0.25, 0.5])
 
@@ -226,7 +227,26 @@ class RasterizerTest < Test::Unit::TestCase
     assert_kind_of Larb::Vec4, vec4
     assert_in_delta 5.5, vec4.w, 0.001
     assert_in_delta 3.5, numeric, 0.001
+    assert_equal [2.5, 4.5], numeric_array
     assert_same passthrough, same_object
+  end
+
+  test "optimized interpolation handles numeric arrays and passes through other arrays" do
+    vertices = Array.new(3) { RBGL::Engine::ShaderIO.new }
+    vertices.each_with_index do |vertex, index|
+      vertex[:samples] = [index.to_f, index + 1.0]
+      vertex[:tags] = [index.to_s]
+    end
+    plan = @interpolator.prepare(vertices)
+    result = RBGL::Engine::ShaderIO.new
+
+    @interpolator.interpolate_triangle(plan, 0.25, 0.25, 0.5, result: result)
+
+    assert_equal [1.25, 2.25], result[:samples]
+    assert_same vertices.first[:tags], result[:tags]
+
+    @interpolator.interpolate_line(plan, 0.75, 0.25, result: result)
+    assert_equal [0.25, 1.25], result[:samples]
   end
 
   test "interpolate_line_attributes handles numeric and passthrough values" do

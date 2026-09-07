@@ -13,7 +13,7 @@ module RBGL
       ].freeze
 
       def clip(v0, v1, v2)
-        polygon = [v0, v1, v2]
+        polygon = [v0, v1, v2].map { |vertex| normalize_vertex(vertex) }
         outcodes = polygon.map { |vertex| outcode(vertex) }
         return [polygon] if outcodes.reduce(:|).zero?
         return [] unless outcodes.reduce(:&).zero?
@@ -39,6 +39,11 @@ module RBGL
 
       def visible_point?(vertex)
         CLIP_PLANES.all? { |plane| signed_distance(vertex, plane) >= 0 }
+      end
+
+      def clip_point(vertex)
+        point = normalize_vertex(vertex)
+        visible_point?(point) ? point : nil
       end
 
       private
@@ -105,7 +110,13 @@ module RBGL
       end
 
       def duplicate_vertex(vertex)
-        ShaderIO.new(vertex.to_h)
+        ShaderIO.new(vertex.to_h).tap do |copy|
+          copy[:position] = clip_position(vertex) if vertex[:position].is_a?(Larb::Vec2)
+        end
+      end
+
+      def normalize_vertex(vertex)
+        vertex[:position].is_a?(Larb::Vec2) ? duplicate_vertex(vertex) : vertex
       end
 
       def interpolated_keys(start_vertex, finish_vertex)

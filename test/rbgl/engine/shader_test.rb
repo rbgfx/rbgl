@@ -423,6 +423,16 @@ class ShaderBuiltinsTest < Test::Unit::TestCase
     assert_equal 0, r.z
   end
 
+  test "refract preserves vector dimension during total internal reflection" do
+    v = normalize(Larb::Vec2.new(1, -0.1))
+    n = Larb::Vec2.new(0, 1)
+
+    result = refract(v, n, 10.0)
+
+    assert_kind_of Larb::Vec2, result
+    assert_equal [0, 0], [result.x, result.y]
+  end
+
   test "mix interpolates colors" do
     a = Larb::Color.new(0, 0, 0, 1)
     b = Larb::Color.new(1, 1, 1, 1)

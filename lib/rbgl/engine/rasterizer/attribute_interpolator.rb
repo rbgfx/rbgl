@@ -51,6 +51,8 @@ module RBGL
             vector4(values, weights)
           when Larb::Color
             color(values, weights)
+          when Array
+            numeric_arrays?(*values) ? array(values, weights) : first
           when Numeric
             scalar(values, weights)
           else
@@ -105,6 +107,7 @@ module RBGL
               (a.b * w0) + (b.b * w1) + (c.b * w2),
               (a.a * w0) + (b.a * w1) + (c.a * w2)
             )
+          when Array then numeric_arrays?(a, b, c) ? array([a, b, c], [w0, w1, w2]) : a
           when Numeric then (a * w0) + (b * w1) + (c * w2)
           else a
           end
@@ -130,6 +133,7 @@ module RBGL
               (a.b * w0) + (b.b * w1),
               (a.a * w0) + (b.a * w1)
             )
+          when Array then numeric_arrays?(a, b) ? array([a, b], [w0, w1]) : a
           when Numeric then (a * w0) + (b * w1)
           else a
           end
@@ -141,6 +145,15 @@ module RBGL
 
         def scalar(values, weights)
           values.zip(weights).sum { |value, weight| value * weight }
+        end
+
+        def array(values, weights)
+          values.transpose.map { |components| scalar(components, weights) }
+        end
+
+        def numeric_arrays?(*values)
+          size = values.first.size
+          values.all? { |value| value.is_a?(Array) && value.size == size && value.all?(Numeric) }
         end
 
         def vector2(values, weights)

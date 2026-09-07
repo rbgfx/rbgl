@@ -54,7 +54,7 @@ module RBGL
       def refract(v, n, eta)
         cos_i = -dot(n, v)
         sin_t2 = eta * eta * (1.0 - (cos_i * cos_i))
-        return vec3(0) if sin_t2 > 1.0
+        return v * 0 if sin_t2 > 1.0
 
         cos_t = Math.sqrt(1.0 - sin_t2)
         (v * eta) + (n * ((eta * cos_i) - cos_t))
