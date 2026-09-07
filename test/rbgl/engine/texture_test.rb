@@ -120,6 +120,15 @@ class TextureTest < Test::Unit::TestCase
     assert_kind_of Larb::Color, color
   end
 
+  test "nearest repeat sampling starts at the first texel" do
+    tex = RBGL::Engine::Texture.new(2, 1, [Larb::Color.red, Larb::Color.blue])
+    tex.wrap_s = :repeat
+    tex.filter_mag = :nearest
+
+    assert_equal Larb::Color.red.to_a, tex.sample(0.0, 0.5).to_a
+    assert_equal Larb::Color.red.to_a, tex.sample(1.0, 0.5).to_a
+  end
+
   test "sample with linear filter" do
     @tex.filter_mag = :linear
     color = @tex.sample(0.25, 0.25)

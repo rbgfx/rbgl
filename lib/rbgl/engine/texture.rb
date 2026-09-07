@@ -32,11 +32,13 @@ module RBGL
         level = mip_level_for(lod)
         level_width = width_for_level(level)
         level_height = height_for_level(level)
+        filter = filter_for_lod(lod)
+        texel_offset = filter == FILTER_LINEAR ? -0.5 : 0.0
 
-        x = (u.to_f * level_width) - 0.5
-        y = (v.to_f * level_height) - 0.5
+        x = (u.to_f * level_width) + texel_offset
+        y = (v.to_f * level_height) + texel_offset
 
-        sample_with_filter(level, x, y, filter_for_lod(lod))
+        sample_with_filter(level, x, y, filter)
       end
 
       def data
@@ -193,7 +195,7 @@ module RBGL
       end
 
       def sample_nearest(level, x, y)
-        pixel_for_level(level, x.round, y.round, wrap_s: @wrap_s, wrap_t: @wrap_t)
+        pixel_for_level(level, x.floor, y.floor, wrap_s: @wrap_s, wrap_t: @wrap_t)
       end
 
       def filter_for_lod(lod)
