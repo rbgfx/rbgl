@@ -12,6 +12,13 @@ module RBGL
           @display = Connection.new(env["DISPLAY"] || ":0", env: env, reply_timeout: reply_timeout)
           @window = nil
           setup_window(width, height, title)
+        rescue StandardError => error
+          begin
+            close
+          rescue StandardError
+            nil
+          end
+          raise error
         end
 
         private def setup_window(w, h, t)
@@ -106,13 +113,22 @@ module RBGL
 
         def close
           window = @window
-          return unless window
+          operations = []
+          if window
+            window[:should_close] = true
+            operations << -> { @display.destroy_window(window[:id]) }
+            operations << -> { @display.flush }
+          end
+          operations << -> { @display&.close }
 
-          window[:should_close] = true
-          @display.destroy_window(window[:id])
-          @display.flush
+          error = nil
+          operations.each do |operation|
+            operation.call
+          rescue StandardError => cleanup_error
+            error ||= cleanup_error
+          end
           @window = nil
-          @display.close
+          raise error if error
         end
 
         private

@@ -1064,6 +1064,19 @@ class X11BackendTest < Test::Unit::TestCase
     assert_nil backend.instance_variable_get(:@window)
   end
 
+  test "close closes the display when window destruction fails" do
+    backend = RBGL::GUI::X11::Backend.allocate
+    display = FakeDisplay.new
+    display.define_singleton_method(:destroy_window) { |_window| raise "write failed" }
+    backend.instance_variable_set(:@display, display)
+    backend.instance_variable_set(:@window, { id: 101, should_close: false })
+
+    assert_raise(RuntimeError) { backend.close }
+
+    assert_true display.instance_variable_get(:@closed)
+    assert_nil backend.instance_variable_get(:@window)
+  end
+
   test "convert_event handles key mouse and resize event kinds" do
     backend = RBGL::GUI::X11::Backend.allocate
     backend.instance_variable_set(:@display, FakeDisplay.new)

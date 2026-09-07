@@ -149,6 +149,16 @@ class WindowTest < Test::Unit::TestCase
     assert_kind_of SpyWindowBackend, window.backend
   end
 
+  test "validates target fps before building a backend" do
+    window = DetectBackendWindow.allocate
+
+    assert_raise(ArgumentError) do
+      window.send(:initialize, width: 120, height: 80, backend: :auto, target_fps: 0)
+    end
+
+    assert_nil window.build_backend_calls
+  end
+
   test "set_pixels delegates dimensions to backend" do
     backend = SpyWindowBackend.new(100, 100)
     window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
@@ -393,6 +403,25 @@ class WindowRunTest < Test::Unit::TestCase
       end
     end
 
+    assert_true backend.closed
+  end
+
+  test "cleanup errors do not mask frame callback errors and close can be retried" do
+    backend = MockLoopBackend.new(100, 100, max_frames: 10)
+    close_attempts = 0
+    backend.define_singleton_method(:close) do
+      close_attempts += 1
+      raise "close failed" if close_attempts == 1
+
+      @closed = true
+    end
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+
+    error = assert_raise(RuntimeError) { window.run { raise "render failed" } }
+    window.close
+
+    assert_equal "render failed", error.message
+    assert_equal 2, close_attempts
     assert_true backend.closed
   end
 

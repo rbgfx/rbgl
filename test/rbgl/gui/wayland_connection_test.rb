@@ -333,6 +333,17 @@ class WaylandConnectionTest < Test::Unit::TestCase
     assert_true buffer.available?
   end
 
+  test "forced destroy completes a deferred wl_buffer destroy" do
+    connection = WaylandProtocolObjectsTest::RecordingConnection.new([])
+    buffer = RBGL::GUI::Wayland::WlBuffer.new(connection, 14)
+    buffer.mark_in_use
+
+    buffer.destroy
+    buffer.destroy(force: true)
+
+    assert_equal [[14, 0, []]], connection.requests
+  end
+
   test "handle_event converts keyboard focus and key events" do
     connection = RBGL::GUI::Wayland::Connection.allocate
     keyboard = RBGL::GUI::Wayland::Keyboard.new(connection, 21)
@@ -714,7 +725,7 @@ class WaylandBackendTest < Test::Unit::TestCase
     backend.instance_variable_set(
       :@connection,
       FakeConnection.new([
-        { type: :key_press, surface_id: 10, key: :escape, keycode: 1 },
+        { type: :key_press, surface_id: 10, key: :escape, keycode: 1, modifiers: { depressed: 1 } },
         { type: :pointer_motion, surface_id: 10, x: 12.5, y: 20.0 },
         { type: :pointer_button_press, surface_id: 10, button: 1, x: 12.5, y: 20.0 },
         { type: :pointer_axis, surface_id: 10, axis: :vertical, value: -1.0, x: 12.5, y: 20.0 }
@@ -725,6 +736,7 @@ class WaylandBackendTest < Test::Unit::TestCase
 
     assert_equal %i[key_press mouse_move mouse_press mouse_scroll], events.map(&:type)
     assert_equal :escape, events[0].key
+    assert_equal({ depressed: 1 }, events[0].modifiers)
     assert_equal 12.5, events[1].x
     assert_equal 1, events[2].button
     assert_equal(-1.0, events[3].value)
@@ -759,6 +771,32 @@ class WaylandBackendTest < Test::Unit::TestCase
       :connection
     ], destroyed
     assert_nil backend.instance_variable_get(:@window)
+  end
+
+  test "close releases all resources when a protocol destroy fails" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    destroyed = []
+    failing = Object.new
+    failing.define_singleton_method(:destroy) { destroyed << :toplevel; raise "write failed" }
+    resource = ->(name) { Object.new.tap { |object| object.define_singleton_method(:destroy) { destroyed << name } } }
+    buffer = Object.new
+    buffer.define_singleton_method(:destroy) { |force: false| destroyed << [:buffer, force] }
+    backend.instance_variable_set(:@retired_buffers, [])
+    backend.instance_variable_set(:@window, {
+      toplevel: failing,
+      xdg_surface: resource.call(:xdg_surface),
+      surface: resource.call(:surface),
+      buffers: [buffer],
+      should_close: false
+    })
+    connection = Object.new
+    connection.define_singleton_method(:flush) { destroyed << :flush }
+    connection.define_singleton_method(:close) { destroyed << :connection }
+    backend.instance_variable_set(:@connection, connection)
+
+    assert_raise(RuntimeError) { backend.close }
+
+    assert_equal [:toplevel, :xdg_surface, :surface, [:buffer, true], :flush, :connection], destroyed
   end
 
   test "setup commits an empty surface and waits for configure before allocating buffers" do
@@ -836,6 +874,38 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_equal 200, backend.height
   end
 
+  test "close force destroys buffers retired while busy" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    destroy_calls = []
+    old_buffer = Object.new
+    old_buffer.define_singleton_method(:destroyed?) { false }
+    old_buffer.define_singleton_method(:destroy) { |force: false| destroy_calls << [:old, force] }
+    new_buffer = Object.new
+    new_buffer.define_singleton_method(:destroy) { |force: false| destroy_calls << [:new, force] }
+    resource = Object.new
+    resource.define_singleton_method(:destroy) {}
+    backend.instance_variable_set(:@retired_buffers, [])
+    backend.instance_variable_set(:@window, {
+      toplevel: resource,
+      xdg_surface: resource,
+      surface: resource,
+      buffers: [old_buffer],
+      width: 10,
+      height: 10,
+      should_close: false
+    })
+    backend.define_singleton_method(:create_shm_buffers) { |_width, _height| [new_buffer] }
+    connection = Object.new
+    connection.define_singleton_method(:flush) {}
+    connection.define_singleton_method(:close) {}
+    backend.instance_variable_set(:@connection, connection)
+
+    backend.resize(20, 20)
+    backend.close
+
+    assert_equal [[:old, false], [:new, true], [:old, true]], destroy_calls
+  end
+
   test "failed resize preserves wayland dimensions and buffers" do
     backend = RBGL::GUI::Wayland::Backend.allocate
     old_buffer = Object.new
@@ -879,7 +949,9 @@ class WaylandBackendTest < Test::Unit::TestCase
       {
         surface: surface,
         buffers: [busy_buffer, free_buffer],
-        shm_buffer: busy_buffer
+        shm_buffer: busy_buffer,
+        width: 2,
+        height: 2
       }
     )
 
@@ -907,7 +979,7 @@ class WaylandBackendTest < Test::Unit::TestCase
     backend.instance_variable_set(:@connection, connection)
     backend.instance_variable_set(
       :@window,
-      { surface: surface, buffers: [buffer], shm_buffer: buffer, should_close: false }
+      { surface: surface, buffers: [buffer], shm_buffer: buffer, width: 1, height: 1, should_close: false }
     )
 
     backend.set_pixels("\xFF\x80\x00\x40", 1, 1)
@@ -946,7 +1018,9 @@ class WaylandBackendTest < Test::Unit::TestCase
       {
         surface: surface,
         buffers: [buffer],
-        shm_buffer: buffer
+        shm_buffer: buffer,
+        width: 2,
+        height: 2
       }
     )
 
@@ -990,6 +1064,8 @@ class WaylandBackendTest < Test::Unit::TestCase
         surface: surface,
         buffers: [buffer],
         shm_buffer: buffer,
+        width: 2,
+        height: 2,
         should_close: false
       }
     )
@@ -1001,6 +1077,17 @@ class WaylandBackendTest < Test::Unit::TestCase
     assert_empty written
     assert_empty attached
     assert_false result
+  end
+
+  test "present rejects framebuffer dimensions that do not match the window" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    backend.instance_variable_set(:@window, { width: 2, height: 2 })
+
+    error = assert_raise(ArgumentError) do
+      backend.present(RBGL::Engine::Framebuffer.new(1, 2))
+    end
+
+    assert_match(/dimensions/, error.message)
   end
 
   test "create_shm_buffer wraps the file, pool, and wl_buffer" do
@@ -1088,5 +1175,21 @@ class WaylandBackendTest < Test::Unit::TestCase
 
     assert_true pool_destroyed
     assert_true tempfile.closed?
+  end
+
+  test "shm_buffer closes its file when pool destruction fails" do
+    tempfile = Tempfile.new("rbgl-shm-buffer-failure")
+    wl_buffer = Object.new
+    wl_buffer.define_singleton_method(:on_release) { |&_block| }
+    wl_buffer.define_singleton_method(:busy?) { false }
+    wl_buffer.define_singleton_method(:destroy) { |force: false| force }
+    pool = Object.new
+    pool.define_singleton_method(:destroy) { raise "write failed" }
+    shm_buffer = RBGL::GUI::Wayland::ShmBuffer.new(tempfile, pool, wl_buffer)
+
+    assert_raise(RuntimeError) { shm_buffer.destroy(force: true) }
+
+    assert_true tempfile.closed?
+    assert_true shm_buffer.destroyed?
   end
 end

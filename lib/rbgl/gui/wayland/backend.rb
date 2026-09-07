@@ -12,12 +12,17 @@ module RBGL
 
         def initialize(width, height, title = "RBGL", env: ENV, roundtrip_timeout: Connection::DEFAULT_ROUNDTRIP_TIMEOUT)
           super(width, height, title)
-          @connection = Connection.new(env: env, roundtrip_timeout: roundtrip_timeout)
           @window = nil
+          @retired_buffers = []
+          @connection = Connection.new(env: env, roundtrip_timeout: roundtrip_timeout)
           setup_window(width, height, title)
-        rescue StandardError
-          @connection&.close
-          raise
+        rescue StandardError => error
+          begin
+            close
+          rescue StandardError
+            nil
+          end
+          raise error
         end
 
         private def setup_window(w, h, t)
@@ -62,6 +67,9 @@ module RBGL
         private def present_bytes(buffer, width, height)
           window = @window
           return false unless window
+          unless width == window[:width] && height == window[:height]
+            raise ArgumentError, "Framebuffer dimensions must match the Wayland window"
+          end
 
           buffer_object = wait_for_available_buffer(window)
           return false unless buffer_object
@@ -93,7 +101,9 @@ module RBGL
           window[:width] = width
           window[:height] = height
           super
+          (@retired_buffers ||= []).concat(old_buffers)
           old_buffers.each(&:destroy)
+          @retired_buffers.reject! { |buffer| buffer.respond_to?(:destroyed?) && buffer.destroyed? }
         end
 
         def should_close?
@@ -102,16 +112,27 @@ module RBGL
 
         def close
           window = @window
-          return unless window
+          operations = []
+          if window
+            window[:should_close] = true
+            operations << -> { window[:toplevel].destroy }
+            operations << -> { window[:xdg_surface].destroy }
+            operations << -> { window[:surface].destroy }
+            buffers = window.fetch(:buffers, [window[:shm_buffer]].compact) + Array(@retired_buffers)
+            operations.concat(buffers.uniq.map { |buffer| -> { buffer.destroy(force: true) } })
+            operations << -> { @connection.flush }
+          end
+          operations << -> { @connection&.close }
 
-          window[:should_close] = true
-          window[:toplevel].destroy
-          window[:xdg_surface].destroy
-          window[:surface].destroy
-          window.fetch(:buffers, [window[:shm_buffer]].compact).each { |buffer| buffer.destroy(force: true) }
-          @connection.flush
+          error = nil
+          operations.each do |operation|
+            operation.call
+          rescue StandardError => cleanup_error
+            error ||= cleanup_error
+          end
           @window = nil
-          @connection.close
+          @retired_buffers = []
+          raise error if error
         end
 
         private
@@ -146,7 +167,7 @@ module RBGL
 
             Event.new(:resize, width: width, height: height)
           when :key_press, :key_release
-            Event.new(raw[:type], key: raw[:key], keycode: raw[:keycode])
+            Event.new(raw[:type], key: raw[:key], keycode: raw[:keycode], modifiers: raw[:modifiers])
           when :pointer_motion
             Event.new(:mouse_move, x: raw[:x], y: raw[:y])
           when :pointer_button_press
@@ -200,7 +221,18 @@ module RBGL
         end
 
         def create_shm_buffers(width, height, count = 2)
-          Array.new(count) { create_shm_buffer(width, height) }
+          buffers = []
+          count.times { buffers << create_shm_buffer(width, height) }
+          buffers
+        rescue StandardError => error
+          buffers&.each do |buffer|
+            begin
+              buffer.destroy(force: true)
+            rescue StandardError
+              nil
+            end
+          end
+          raise error
         end
 
         def create_shm_buffer(width, height)
@@ -211,6 +243,19 @@ module RBGL
           buffer = pool.create_buffer(0, width, height, width * 4, :xrgb8888)
 
           ShmBuffer.new(file, pool, buffer)
+        rescue StandardError => error
+          begin
+            buffer&.destroy(force: true)
+          rescue StandardError
+            nil
+          end
+          begin
+            pool&.destroy
+          rescue StandardError
+            nil
+          end
+          file&.close unless file&.closed?
+          raise error
         end
 
         def create_anonymous_file(size)

@@ -12,6 +12,7 @@ module RBGL
         @width = width
         @height = height
         @title = title
+        @render_loop = RenderLoop.new(target_fps: target_fps)
         @context = Engine::Context.new(width: width, height: height)
         @backend = build_backend(backend, width: width, height: height, title: title, **options)
         @event_handlers = Hash.new { |h, k| h[k] = [] }
@@ -20,7 +21,6 @@ module RBGL
           event_handlers: @event_handlers,
           on_resize: method(:apply_resize)
         )
-        @render_loop = RenderLoop.new(target_fps: target_fps)
         @closed = false
       end
 
@@ -39,7 +39,12 @@ module RBGL
           &frame_callback
         )
       ensure
-        close if @backend
+        original_error = $!
+        begin
+          close if @backend
+        rescue StandardError
+          raise unless original_error
+        end
       end
 
       def stop
@@ -82,7 +87,6 @@ module RBGL
 
         @render_loop.stop
         @backend.close
-      ensure
         @closed = true
       end
 

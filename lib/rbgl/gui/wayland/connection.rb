@@ -37,6 +37,13 @@ module RBGL
           roundtrip
 
           bind_globals
+        rescue StandardError => error
+          begin
+            close
+          rescue StandardError
+            nil
+          end
+          raise error
         end
 
         def allocate_id
@@ -140,14 +147,26 @@ module RBGL
         def close
           return if @closed
 
-          @received_fds&.each { |fd| fd.close unless fd.closed? }
-          @received_fds&.clear
-          @socket.close unless @socket.closed?
-          @closed = true
+          error = nil
+          @received_fds&.each do |fd|
+            fd.close unless fd.closed?
+          rescue StandardError => close_error
+            error ||= close_error
+          end
+          @received_fds&.reject!(&:closed?)
+
+          begin
+            @socket&.close unless @socket&.closed?
+          rescue StandardError => close_error
+            error ||= close_error
+          end
+
+          @closed = @received_fds.to_a.empty? && (!@socket || @socket.closed?)
+          raise error if error
         end
 
         def closed?
-          @closed || @socket.closed?
+          @closed || !@socket || @socket.closed?
         end
 
         private

@@ -69,7 +69,7 @@ module RBGL
         end
 
         def destroy(force: false)
-          return if @destroyed || @destroy_requested
+          return if @destroyed || (@destroy_requested && !force)
 
           if @busy && !force
             @destroy_requested = true
@@ -124,8 +124,15 @@ module RBGL
           return if @destroyed
 
           @destroy_requested = true
-          force ? @wl_buffer.destroy(force: true) : @wl_buffer.destroy
-          finalize_destroy if force || !@wl_buffer.busy?
+          begin
+            force ? @wl_buffer.destroy(force: true) : @wl_buffer.destroy
+          ensure
+            finalize_destroy if force || !@wl_buffer.busy?
+          end
+        end
+
+        def destroyed?
+          @destroyed
         end
 
         private
@@ -137,9 +144,12 @@ module RBGL
         def finalize_destroy
           return if @destroyed
 
-          @pool.destroy
-          @file.close unless @file.closed?
-          @destroyed = true
+          begin
+            @pool.destroy
+          ensure
+            @file.close unless @file.closed?
+            @destroyed = true
+          end
         end
       end
     end
