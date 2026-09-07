@@ -40,7 +40,7 @@ module RBGL
         end
 
         def should_close?
-          return false unless @handle
+          return true unless @handle
 
           Metaco.should_close?(@handle)
         end

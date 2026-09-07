@@ -82,10 +82,9 @@ module RBGL
         end
 
         def resize(width, height)
-          super
           window = @window
-          return unless window
-          return if window[:width] == width && window[:height] == height
+          return super unless window
+          return super if window[:width] == width && window[:height] == height
 
           old_buffers = window.fetch(:buffers, [window[:shm_buffer]].compact)
           new_buffers = create_shm_buffers(width, height)
@@ -93,6 +92,7 @@ module RBGL
           window[:shm_buffer] = new_buffers.first
           window[:width] = width
           window[:height] = height
+          super
           old_buffers.each(&:destroy)
         end
 
@@ -144,8 +144,6 @@ module RBGL
             height = raw[:height]
             return nil unless width.positive? && height.positive?
 
-            window[:width] = width
-            window[:height] = height
             Event.new(:resize, width: width, height: height)
           when :key_press, :key_release
             Event.new(raw[:type], key: raw[:key], keycode: raw[:keycode])

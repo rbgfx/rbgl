@@ -182,12 +182,18 @@ class WindowTest < Test::Unit::TestCase
     assert_true window.should_close?
   end
 
-  test "poll_events_raw delegates to backend" do
+  test "poll_events_raw delegates to backend without dispatching handlers" do
     backend = SpyWindowBackend.new(100, 100)
-    backend.raw_events = [{ type: :key_press }]
+    backend.raw_events = [{ type: :resize, width: 320, height: 240 }]
     window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend)
+    called = false
+    window.on(:resize) { called = true }
 
-    assert_equal [{ type: :key_press }], window.poll_events_raw
+    assert_equal [{ type: :resize, width: 320, height: 240 }], window.poll_events_raw
+    assert_equal [320, 240], [window.width, window.height]
+    assert_equal [320, 240], [window.context.width, window.context.height]
+    assert_equal [[320, 240]], backend.resize_calls
+    assert_false called
   end
 
   test "close delegates to backend" do
@@ -198,6 +204,20 @@ class WindowTest < Test::Unit::TestCase
 
     assert_equal 1, backend.close_count
     assert_true backend.should_close?
+  end
+
+  test "close stops an active render loop before another present" do
+    backend = MockLoopBackend.new(100, 100, max_frames: 10)
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend: backend, target_fps: nil)
+    frames = 0
+
+    window.run do
+      frames += 1
+      window.close
+    end
+
+    assert_equal 1, frames
+    assert_equal 0, backend.present_count
   end
 end
 

@@ -503,6 +503,22 @@ class WaylandConnectionTest < Test::Unit::TestCase
     assert_equal :wait_readable, connection.send(:receive_message)
   end
 
+  test "socket EOF raises backend unavailable" do
+    reader, writer = UNIXSocket.pair
+    writer.close
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    connection.instance_variable_set(:@socket, reader)
+    connection.instance_variable_set(:@read_buffer, String.new(encoding: Encoding::BINARY))
+    connection.instance_variable_set(:@received_fds, [])
+
+    assert_raise(RBGL::GUI::BackendUnavailable) do
+      connection.send(:read_from_socket, 0)
+    end
+  ensure
+    reader&.close unless reader&.closed?
+    writer&.close unless writer&.closed?
+  end
+
   test "pump_events receives the keyboard keymap file descriptor" do
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
     keymap_file = Tempfile.new("rbgl-wayland-keymap")
@@ -657,6 +673,20 @@ class WaylandBackendTest < Test::Unit::TestCase
 
     assert_equal [:resize, :close], events.map(&:type)
     assert_true backend.should_close?
+  end
+
+  test "configure leaves buffer dimensions unchanged until resize" do
+    backend = RBGL::GUI::Wayland::Backend.allocate
+    toplevel = FakeObject.new(33)
+    window = { toplevel: toplevel, width: 100, height: 80, should_close: false }
+    backend.instance_variable_set(:@window, window)
+
+    event = backend.send(:convert_event, {
+      type: :xdg_toplevel_configure, object_id: 33, width: 320, height: 200
+    })
+
+    assert_equal [320, 200], [event.width, event.height]
+    assert_equal [100, 80], [window[:width], window[:height]]
   end
 
   test "poll_events converts keyboard and pointer events for the focused surface" do

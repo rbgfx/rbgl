@@ -14,6 +14,12 @@ class CocoaBackendTest < Test::Unit::TestCase
     assert_false backend.present(RBGL::Engine::Framebuffer.new(1, 1))
   end
 
+  test "backend without a handle is closed" do
+    backend = RBGL::GUI::Cocoa::Backend.allocate
+
+    assert_true backend.should_close?
+  end
+
   test "convert_event maps resize events" do
     backend = RBGL::GUI::Cocoa::Backend.allocate
 

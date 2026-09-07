@@ -68,12 +68,19 @@ module RBGL
       end
 
       def poll_events_raw
-        @backend.poll_events_raw
+        events = @backend.poll_events_raw
+        Array(events).each do |event|
+          next unless event.respond_to?(:[]) && event[:type] == :resize
+
+          apply_resize(Event.new(:resize, width: event[:width], height: event[:height]))
+        end
+        events
       end
 
       def close
         return if @closed
 
+        @render_loop.stop
         @backend.close
       ensure
         @closed = true
