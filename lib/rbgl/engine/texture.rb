@@ -7,7 +7,7 @@ module RBGL
       WRAP_MODES = %i[repeat clamp mirror].freeze
       FILTER_MODES = %i[nearest linear].freeze
 
-      attr_reader :width, :height, :data, :wrap_s, :wrap_t, :filter_min, :filter_mag
+      attr_reader :width, :height, :wrap_s, :wrap_t, :filter_min, :filter_mag
 
       WRAP_REPEAT = :repeat
       WRAP_CLAMP = :clamp
@@ -29,16 +29,18 @@ module RBGL
       end
 
       def sample(u, v, lod: 0)
-        u = wrap_coord(u, @wrap_s)
-        v = wrap_coord(v, @wrap_t)
         level = mip_level_for(lod)
         level_width = width_for_level(level)
         level_height = height_for_level(level)
 
-        x = u * (level_width - 1)
-        y = v * (level_height - 1)
+        x = (u.to_f * level_width) - 0.5
+        y = (v.to_f * level_height) - 0.5
 
         sample_with_filter(level, x, y, filter_for_lod(lod))
+      end
+
+      def data
+        @data.dup.freeze
       end
 
       def get_pixel(x, y)
@@ -176,18 +178,6 @@ module RBGL
         ImmutableColor.from(validate_color!(color))
       end
 
-      def wrap_coord(coord, mode)
-        case mode
-        when WRAP_REPEAT
-          coord - coord.floor
-        when WRAP_CLAMP
-          coord.clamp(0.0, 1.0)
-        when WRAP_MIRROR
-          t = coord - coord.floor
-          coord.floor.to_i.even? ? t : 1.0 - t
-        end
-      end
-
       def validate_wrap_mode!(mode)
         normalized = mode.to_sym
         return normalized if WRAP_MODES.include?(normalized)
@@ -203,7 +193,7 @@ module RBGL
       end
 
       def sample_nearest(level, x, y)
-        pixel_for_level(level, x.round, y.round)
+        pixel_for_level(level, x.round, y.round, wrap_s: @wrap_s, wrap_t: @wrap_t)
       end
 
       def filter_for_lod(lod)
@@ -229,10 +219,10 @@ module RBGL
         fx = x - x0
         fy = y - y0
 
-        c00 = pixel_for_level(level, x0, y0)
-        c10 = pixel_for_level(level, x1, y0)
-        c01 = pixel_for_level(level, x0, y1)
-        c11 = pixel_for_level(level, x1, y1)
+        c00 = pixel_for_level(level, x0, y0, wrap_s: @wrap_s, wrap_t: @wrap_t)
+        c10 = pixel_for_level(level, x1, y0, wrap_s: @wrap_s, wrap_t: @wrap_t)
+        c01 = pixel_for_level(level, x0, y1, wrap_s: @wrap_s, wrap_t: @wrap_t)
+        c11 = pixel_for_level(level, x1, y1, wrap_s: @wrap_s, wrap_t: @wrap_t)
 
         c0 = c00.lerp(c10, fx)
         c1 = c01.lerp(c11, fx)
@@ -246,13 +236,25 @@ module RBGL
         [lod.floor, @levels.size - 1].min
       end
 
-      def pixel_for_level(level, x, y)
+      def pixel_for_level(level, x, y, wrap_s: WRAP_CLAMP, wrap_t: WRAP_CLAMP)
         level_width = width_for_level(level)
         level_height = height_for_level(level)
         level_data = level.zero? ? @data : level_data(level)
-        clamped_x = x.clamp(0, level_width - 1).to_i
-        clamped_y = y.clamp(0, level_height - 1).to_i
-        level_data[(clamped_y * level_width) + clamped_x]
+        sample_x = wrap_index(x.to_i, level_width, wrap_s)
+        sample_y = wrap_index(y.to_i, level_height, wrap_t)
+        level_data[(sample_y * level_width) + sample_x]
+      end
+
+      def wrap_index(index, size, mode)
+        case mode
+        when WRAP_REPEAT
+          index % size
+        when WRAP_CLAMP
+          index.clamp(0, size - 1)
+        when WRAP_MIRROR
+          mirrored = index % (size * 2)
+          mirrored < size ? mirrored : ((size * 2) - mirrored - 1)
+        end
       end
 
       def level_data(level)
@@ -291,27 +293,35 @@ module RBGL
         Array.new(target_width * target_height) do |index|
           x = index % target_width
           y = index / target_width
-          average_texel_block(source_data, source_width, source_height, x * 2, y * 2)
+          start_x = x * source_width.fdiv(target_width)
+          end_x = (x + 1) * source_width.fdiv(target_width)
+          start_y = y * source_height.fdiv(target_height)
+          end_y = (y + 1) * source_height.fdiv(target_height)
+          average_texel_area(source_data, source_width, start_x, end_x, start_y, end_y)
         end
       end
 
-      def average_texel_block(source_data, source_width, source_height, start_x, start_y)
-        samples = []
+      def average_texel_area(source_data, source_width, start_x, end_x, start_y, end_y)
+        red = green = blue = alpha = total_weight = 0.0
 
-        2.times do |dy|
-          2.times do |dx|
-            x = [start_x + dx, source_width - 1].min
-            y = [start_y + dy, source_height - 1].min
-            samples << source_data[(y * source_width) + x]
+        (start_y.floor...end_y.ceil).each do |y|
+          y_weight = [end_y, y + 1].min - [start_y, y].max
+          (start_x.floor...end_x.ceil).each do |x|
+            weight = ([end_x, x + 1].min - [start_x, x].max) * y_weight
+            color = source_data[(y * source_width) + x]
+            red += color.r * weight
+            green += color.g * weight
+            blue += color.b * weight
+            alpha += color.a * weight
+            total_weight += weight
           end
         end
 
-        sample_count = samples.length.to_f
         immutable_color(Larb::Color.new(
-          samples.sum(&:r) / sample_count,
-          samples.sum(&:g) / sample_count,
-          samples.sum(&:b) / sample_count,
-          samples.sum(&:a) / sample_count
+          red / total_weight,
+          green / total_weight,
+          blue / total_weight,
+          alpha / total_weight
         ))
       end
     end

@@ -18,6 +18,13 @@ class TextureTest < Test::Unit::TestCase
     assert_kind_of Larb::Color, @tex.data[0]
   end
 
+  test "data does not expose the mutable pixel array" do
+    pixels = @tex.data
+
+    assert_raise(FrozenError) { pixels[0] = Larb::Color.red }
+    assert_equal Larb::Color.black.to_a, @tex.get_pixel(0, 0).to_a
+  end
+
   test "default wrap modes are repeat" do
     assert_equal :repeat, @tex.wrap_s
     assert_equal :repeat, @tex.wrap_t
@@ -119,6 +126,18 @@ class TextureTest < Test::Unit::TestCase
     assert_kind_of Larb::Color, color
   end
 
+  test "linear repeat filtering interpolates across the seam" do
+    tex = RBGL::Engine::Texture.new(2, 1, [Larb::Color.red, Larb::Color.blue])
+    tex.wrap_s = :repeat
+    tex.filter_mag = :linear
+
+    left = tex.sample(-1e-6, 0.5)
+    right = tex.sample(1e-6, 0.5)
+
+    assert_in_delta left.r, right.r, 1e-4
+    assert_in_delta left.b, right.b, 1e-4
+  end
+
   test "wrap setters reject unsupported modes" do
     assert_raise(ArgumentError) { @tex.wrap_s = :invalid }
     assert_raise(ArgumentError) { @tex.wrap_t = :invalid }
@@ -179,6 +198,14 @@ class TextureTest < Test::Unit::TestCase
     assert_in_delta 0.5, color.r, 0.001
     assert_in_delta 0.5, color.g, 0.001
     assert_in_delta 0.5, color.b, 0.001
+  end
+
+  test "mipmaps include the full source area for odd dimensions" do
+    tex = RBGL::Engine::Texture.new(3, 1, [Larb::Color.black, Larb::Color.black, Larb::Color.red])
+
+    color = tex.sample(0.5, 0.5, lod: 1)
+
+    assert_in_delta 1.0 / 3.0, color.r, 1e-10
   end
 
   test "checker creates checkerboard texture" do
