@@ -127,6 +127,22 @@ class ContextTest < Test::Unit::TestCase
     @ctx.draw_elements(:triangles, 3)
   end
 
+  test "draw calls reject invalid ranges" do
+    setup_indexed_triangle
+
+    assert_raise(ArgumentError) { @ctx.draw_arrays(:triangles, -1, 3) }
+    assert_raise(ArgumentError) { @ctx.draw_arrays(:triangles, 0, 4) }
+    assert_raise(ArgumentError) { @ctx.draw_elements(:triangles, 3, -1) }
+    assert_raise(ArgumentError) { @ctx.draw_elements(:triangles, 4) }
+  end
+
+  test "draw_elements rejects indices outside the vertex buffer" do
+    setup_triangle
+    @ctx.bind_index_buffer(RBGL::Engine::IndexBuffer.new([0, 1, 3]))
+
+    assert_raise(ArgumentError) { @ctx.draw_elements(:triangles, 3) }
+  end
+
   test "draw_elements with lines mode" do
     @ctx.bind_pipeline(@pipeline)
     @vb.add_vertex(position: Larb::Vec4.new(-0.5, 0, 0, 1), color: Larb::Color.new(1, 1, 1, 1))

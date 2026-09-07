@@ -45,6 +45,30 @@ class VertexLayoutTest < Test::Unit::TestCase
     assert_equal :color, layout.attributes[:color].kind
   end
 
+  test "updates stride when attributes are added after initialization" do
+    layout = RBGL::Engine::VertexLayout.new { attribute :position, 1 }
+
+    layout.attribute(:weight, 1)
+
+    assert_equal 2, layout.stride
+  end
+
+  test "rejects duplicate attribute names" do
+    assert_raise(ArgumentError) do
+      RBGL::Engine::VertexLayout.new do
+        attribute :position, 1
+        attribute :position, 1
+      end
+    end
+  end
+
+  test "rejects changes after a vertex buffer finalizes the layout" do
+    layout = RBGL::Engine::VertexLayout.new { attribute :position, 1 }
+    RBGL::Engine::VertexBuffer.new(layout)
+
+    assert_raise(ArgumentError) { layout.attribute(:weight, 1) }
+  end
+
   test "position_only creates layout with position attribute" do
     layout = RBGL::Engine::VertexLayout.position_only
     assert layout.attributes.key?(:position)
@@ -254,15 +278,23 @@ class IndexBufferTest < Test::Unit::TestCase
     assert_equal [0, 1, 2], buffer.indices
   end
 
-  test "converts indices to integers" do
-    buffer = RBGL::Engine::IndexBuffer.new([0.5, 1.7, 2.9])
-    assert_equal [0, 1, 2], buffer.indices
+  test "rejects non-integer and negative indices" do
+    assert_raise(ArgumentError) { RBGL::Engine::IndexBuffer.new([0, 1.5, 2]) }
+    assert_raise(ArgumentError) { RBGL::Engine::IndexBuffer.new([0, "1", 2]) }
+    assert_raise(ArgumentError) { RBGL::Engine::IndexBuffer.new([0, -1, 2]) }
   end
 
   test "add appends indices" do
     buffer = RBGL::Engine::IndexBuffer.new([0, 1, 2])
     buffer.add(3, 4, 5)
     assert_equal [0, 1, 2, 3, 4, 5], buffer.indices
+  end
+
+  test "add rejects invalid indices" do
+    buffer = RBGL::Engine::IndexBuffer.new
+
+    assert_raise(ArgumentError) { buffer.add(0, -1) }
+    assert_empty buffer.indices
   end
 
   test "add returns self for chaining" do

@@ -46,12 +46,18 @@ module RBGL
 
       def draw_arrays(mode, first, count)
         validate_draw_state!
+        validate_draw_range!(first, count, @vertex_buffer.vertex_count)
         draw_vertices(mode, first...(first + count))
       end
 
       def draw_elements(mode, count, offset = 0)
         validate_draw_state!(indexed: true)
-        indices = @index_buffer.indices[offset, count] || []
+        all_indices = @index_buffer.indices
+        validate_draw_range!(offset, count, all_indices.size)
+        indices = all_indices[offset, count]
+        invalid_index = indices.find { |index| index >= @vertex_buffer.vertex_count }
+        raise ArgumentError, "Vertex index out of bounds: #{invalid_index}" if invalid_index
+
         draw_vertices(mode, indices, vertex_cache: {})
       end
 
@@ -73,6 +79,15 @@ module RBGL
         raise "No pipeline bound" unless @pipeline
         raise "No vertex buffer bound" unless @vertex_buffer
         raise "No index buffer bound" if indexed && !@index_buffer
+      end
+
+      def validate_draw_range!(offset, count, limit)
+        unless offset.is_a?(Integer) && count.is_a?(Integer) && offset >= 0 && count >= 0
+          raise ArgumentError, "Draw offset and count must be non-negative Integers"
+        end
+        return if offset + count <= limit
+
+        raise ArgumentError, "Draw range exceeds available data"
       end
 
       def draw_vertices(mode, indices, vertex_cache: nil)

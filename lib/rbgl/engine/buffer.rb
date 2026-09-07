@@ -101,13 +101,26 @@ module RBGL
       def initialize(&block)
         @attributes = {}
         @offset = 0
+        @stride = 0
+        @finalized = false
         instance_eval(&block) if block_given?
-        @stride = @offset
       end
 
       def attribute(name, size, kind: nil)
-        @attributes[name.to_sym] = VertexAttribute.new(name, size, @offset, kind: kind)
+        raise ArgumentError, "Vertex layout is finalized" if @finalized
+
+        key = name.to_sym
+        raise ArgumentError, "Duplicate vertex attribute: #{key}" if @attributes.key?(key)
+
+        @attributes[key] = VertexAttribute.new(key, size, @offset, kind: kind)
         @offset += size
+        @stride = @offset
+      end
+
+      def finalize!
+        @finalized = true
+        @attributes.freeze
+        self
       end
 
       def self.position_only
@@ -147,7 +160,7 @@ module RBGL
           raise ArgumentError, "VertexBuffer layout must be an RBGL::Engine::VertexLayout"
         end
 
-        @layout = layout
+        @layout = layout.finalize!
         @data = []
         @vertex_count = 0
       end
@@ -203,14 +216,16 @@ module RBGL
     end
 
     class IndexBuffer
-      attr_reader :indices
-
       def initialize(indices = [])
-        @indices = indices.map(&:to_i)
+        @indices = validate_indices!(indices)
+      end
+
+      def indices
+        @indices.dup.freeze
       end
 
       def add(*idx)
-        @indices.concat(idx.flatten.map(&:to_i))
+        @indices.concat(validate_indices!(idx.flatten))
         self
       end
 
@@ -227,6 +242,18 @@ module RBGL
         return enum_for(:each_triangle) unless block_given?
 
         (0...triangle_count).each { |i| yield get_triangle(i) }
+      end
+
+      private
+
+      def validate_indices!(indices)
+        indices.map do |index|
+          unless index.is_a?(Integer) && index >= 0
+            raise ArgumentError, "Index must be a non-negative Integer: #{index.inspect}"
+          end
+
+          index
+        end
       end
     end
   end
