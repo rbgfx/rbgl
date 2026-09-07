@@ -84,6 +84,52 @@ class RasterizerTest < Test::Unit::TestCase
     assert_equal 1.0, middle_color.r
   end
 
+  test "rasterize_line interpolates depth in screen space" do
+    v0 = create_vertex(-0.5, 0.0, -1.0, 1.0)
+    v1 = create_vertex(1.0, 0.0, 2.0, 2.0)
+
+    @rasterizer.rasterize_line(v0, v1, @fragment_shader, @uniforms)
+
+    assert_in_delta 0.5, @fb.get_depth(50, 50), 1e-10
+  end
+
+  test "rasterize_triangle interpolates depth in screen space" do
+    framebuffer = RBGL::Engine::Framebuffer.new(4, 4)
+    rasterizer = RBGL::Engine::Rasterizer.new(framebuffer)
+    vertices = [
+      create_vertex(-1.0, 1.0, -1.0, 1.0),
+      create_vertex(2.0, 2.0, 2.0, 2.0),
+      create_vertex(-2.0, -2.0, 2.0, 2.0)
+    ]
+
+    rasterizer.rasterize_triangle(*vertices, @fragment_shader, @uniforms, cull_mode: :none)
+
+    assert_in_delta 0.25, framebuffer.get_depth(0, 0), 1e-10
+  end
+
+  test "shared triangle edge is rasterized once" do
+    framebuffer = RBGL::Engine::Framebuffer.new(4, 4)
+    rasterizer = RBGL::Engine::Rasterizer.new(framebuffer)
+    corners = [
+      create_vertex(-1.0, 1.0, 0.0),
+      create_vertex(1.0, 1.0, 0.0),
+      create_vertex(1.0, -1.0, 0.0),
+      create_vertex(-1.0, -1.0, 0.0)
+    ]
+    shader = RBGL::Engine::FragmentShader.new do |_input, _uniforms, output|
+      output.color = Larb::Color.new(1.0, 0.0, 0.0, 0.5)
+    end
+
+    [[0, 1, 2], [0, 2, 3]].each do |indices|
+      rasterizer.rasterize_triangle(
+        *indices.map { |index| corners[index] }, shader, @uniforms,
+        cull_mode: :none, depth_test: false, depth_write: false, blend_mode: :alpha
+      )
+    end
+
+    assert_equal framebuffer.get_pixel(1, 0).r, framebuffer.get_pixel(1, 1).r
+  end
+
   test "rasterize_point draws point" do
     v = create_vertex(0.0, 0.0, 0.0)
 
@@ -220,9 +266,9 @@ class RasterizerTest < Test::Unit::TestCase
 
   private
 
-  def create_vertex(x, y, z)
+  def create_vertex(x, y, z, w = 1.0)
     io = RBGL::Engine::ShaderIO.new
-    io[:position] = Larb::Vec4.new(x, y, z, 1.0)
+    io[:position] = Larb::Vec4.new(x, y, z, w)
     io[:color] = Larb::Color.new(1, 1, 1, 1)
     io
   end

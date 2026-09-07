@@ -37,13 +37,18 @@ module RBGL
           x_steps = [p2.y - p1.y, p0.y - p2.y, p1.y - p0.y]
           y_steps = [p1.x - p2.x, p2.x - p0.x, p0.x - p1.x]
           positive_area = area.positive?
+          inclusive_edges = [
+            inclusive_edge?(p1, p2, positive_area),
+            inclusive_edge?(p2, p0, positive_area),
+            inclusive_edge?(p0, p1, positive_area)
+          ]
 
           (min_y..max_y).each do |pixel_y|
             w0 = row_w0
             w1 = row_w1
             w2 = row_w2
             (min_x..max_x).each do |pixel_x|
-              if inside_triangle?(w0, w1, w2, positive_area)
+              if inside_triangle?(w0, w1, w2, positive_area, inclusive_edges)
                 screen_w0 = w0 * inv_area
                 screen_w1 = w1 * inv_area
                 screen_w2 = w2 * inv_area
@@ -56,7 +61,7 @@ module RBGL
                   corrected_w1 /= total
                   corrected_w2 /= total
                 end
-                depth = (p0.z * corrected_w0) + (p1.z * corrected_w1) + (p2.z * corrected_w2)
+                depth = (p0.z * screen_w0) + (p1.z * screen_w1) + (p2.z * screen_w2)
                 @interpolator.interpolate_triangle(
                   interpolation_plan, corrected_w0, corrected_w1, corrected_w2, result: attributes
                 )
@@ -89,8 +94,23 @@ module RBGL
           ((x - a.x) * (b.y - a.y)) - ((y - a.y) * (b.x - a.x))
         end
 
-        def inside_triangle?(w0, w1, w2, positive_area)
-          positive_area ? w0 >= 0 && w1 >= 0 && w2 >= 0 : w0 <= 0 && w1 <= 0 && w2 <= 0
+        def inside_triangle?(w0, w1, w2, positive_area, inclusive_edges)
+          inside_edge?(w0, positive_area, inclusive_edges[0]) &&
+            inside_edge?(w1, positive_area, inclusive_edges[1]) &&
+            inside_edge?(w2, positive_area, inclusive_edges[2])
+        end
+
+        def inside_edge?(weight, positive_area, inclusive)
+          positive_area ? weight.positive? || (weight.zero? && inclusive) :
+                          weight.negative? || (weight.zero? && inclusive)
+        end
+
+        def inclusive_edge?(start_point, end_point, positive_area)
+          dx = end_point.x - start_point.x
+          dy = end_point.y - start_point.y
+          dx = -dx if positive_area
+          dy = -dy if positive_area
+          dy.positive? || (dy.zero? && dx.positive?)
         end
 
         def culled?(area, cull_mode)

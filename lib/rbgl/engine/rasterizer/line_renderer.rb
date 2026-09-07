@@ -40,7 +40,7 @@ module RBGL
               corrected_w0 /= total
               corrected_w1 /= total
             end
-            depth = (p0.z * corrected_w0) + (p1.z * corrected_w1)
+            depth = (p0.z * (1.0 - t)) + (p1.z * t)
             @interpolator.interpolate_line(interpolation_plan, corrected_w0, corrected_w1, result: attributes)
 
             shade_fragment(x0, y0, depth, attributes, fragment_shader, uniforms, state, fragment_output)
