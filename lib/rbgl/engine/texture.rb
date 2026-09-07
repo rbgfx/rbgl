@@ -117,7 +117,7 @@ module RBGL
       def self.parse_ppm_samples(content, format, pixel_count, max_val, body_offset)
         case format
         when "P3"
-          parse_p3_samples(content.byteslice(body_offset..), pixel_count)
+          parse_p3_samples(content.byteslice(body_offset..), pixel_count, max_val)
         when "P6"
           parse_p6_samples(content, body_offset, pixel_count, max_val)
         else
@@ -125,12 +125,19 @@ module RBGL
         end
       end
 
-      def self.parse_p3_samples(body, pixel_count)
-        samples = body.to_s.gsub(/#[^\n]*/, " ").scan(/\d+/).map(&:to_i)
+      def self.parse_p3_samples(body, pixel_count, max_val)
+        tokens = body.to_s.gsub(/#[^\n]*/, " ").split
         expected_count = pixel_count * 3
-        raise ArgumentError, "PPM pixel data is truncated" if samples.length < expected_count
+        raise ArgumentError, "PPM pixel data is truncated" if tokens.length < expected_count
 
-        samples.first(expected_count)
+        tokens.first(expected_count).map do |token|
+          raise ArgumentError, "Invalid PPM sample: #{token}" unless /\A\d+\z/.match?(token)
+
+          value = token.to_i
+          raise ArgumentError, "PPM sample exceeds max value: #{value}" if value > max_val
+
+          value
+        end
       end
 
       def self.parse_p6_samples(content, body_offset, pixel_count, max_val)

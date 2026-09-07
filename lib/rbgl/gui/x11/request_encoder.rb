@@ -116,7 +116,7 @@ module RBGL
         def pack_property_data(data, format)
           case format
           when 8
-            bytes = data.to_s
+            bytes = data.to_s.b
             [bytes, bytes.bytesize]
           when 16
             values = Array(data)
@@ -130,8 +130,9 @@ module RBGL
         end
 
         def pad_to_4(str)
-          padding = (4 - (str.bytesize % 4)) % 4
-          str + ("\x00" * padding)
+          bytes = str.b
+          padding = (4 - (bytes.bytesize % 4)) % 4
+          bytes + ("\x00" * padding)
         end
 
         private

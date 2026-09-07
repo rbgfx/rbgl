@@ -433,6 +433,16 @@ class WaylandConnectionTest < Test::Unit::TestCase
     assert_raise(ArgumentError) { connection.send(:pack_args, [1]) }
   end
 
+  test "pack_args encodes non-ASCII strings as protocol bytes" do
+    connection = RBGL::GUI::Wayland::Connection.allocate
+    title = "あ" * 43
+
+    packed = connection.send(:pack_args, [RBGL::GUI::Wayland::Arguments.string(title)])
+
+    assert_equal Encoding::BINARY, packed.encoding
+    assert_equal title.b + "\x00", packed.byteslice(4, title.bytesize + 1)
+  end
+
   test "send_request_with_fd sends an IO descriptor" do
     sender, receiver = Socket.pair(:UNIX, :STREAM, 0)
     file = Tempfile.new("rbgl-wayland-rights")

@@ -40,8 +40,9 @@ module RBGL
         end
 
         def pack_string(value)
-          length = value.bytesize + 1
-          [length].pack("V") + value + "\x00" + ("\x00" * ((4 - (length % 4)) % 4))
+          bytes = value.to_s.encode(Encoding::UTF_8).b
+          length = bytes.bytesize + 1
+          [length].pack("V") + bytes + "\x00" + ("\x00" * ((4 - (length % 4)) % 4))
         end
       end
     end

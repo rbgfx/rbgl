@@ -339,4 +339,12 @@ class TextureTest < Test::Unit::TestCase
       end
     end
   end
+
+  test "from_ppm rejects malformed and out-of-range P3 samples" do
+    ["-1 0 0", "1.5 2 3", "garbage 255 0 0", "256 0 0"].each do |body|
+      assert_raise(ArgumentError) do
+        RBGL::Engine::Texture.send(:parse_p3_samples, body, 1, 255)
+      end
+    end
+  end
 end

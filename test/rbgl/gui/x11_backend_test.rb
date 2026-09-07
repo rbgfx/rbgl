@@ -86,6 +86,17 @@ class X11ConnectionTest < Test::Unit::TestCase
     assert_equal [77].pack("V"), request[20, 4]
   end
 
+  test "change_property encodes non-ASCII strings as protocol bytes" do
+    encoder = RBGL::GUI::X11::RequestEncoder.new
+
+    [[0x200000, "あ" * 43], [0x800000, "あ"]].each do |window, title|
+      _mode, request = encoder.change_property_data(window, 39, 31, title)
+
+      assert_equal Encoding::BINARY, request.encoding
+      assert_equal title.b, request.byteslice(20, title.bytesize)
+    end
+  end
+
   test "enable_wm_delete_window writes wm protocol atom" do
     connection = RBGL::GUI::X11::Connection.allocate
     calls = []
