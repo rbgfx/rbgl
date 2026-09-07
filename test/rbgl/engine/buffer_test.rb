@@ -26,6 +26,12 @@ class VertexAttributeTest < Test::Unit::TestCase
 
     assert_equal :color, attr.kind
   end
+
+  test "rejects invalid attribute sizes" do
+    [0, -1, 1.5, "2"].each do |size|
+      assert_raise(ArgumentError) { RBGL::Engine::VertexAttribute.new(:position, size) }
+    end
+  end
 end
 
 class VertexLayoutTest < Test::Unit::TestCase
@@ -322,6 +328,12 @@ class IndexBufferTest < Test::Unit::TestCase
     buffer = RBGL::Engine::IndexBuffer.new([0, 1, 2, 3, 4, 5])
     assert_equal [0, 1, 2], buffer.get_triangle(0)
     assert_equal [3, 4, 5], buffer.get_triangle(1)
+  end
+
+  test "get_triangle does not treat negative indices as offsets from the end" do
+    buffer = RBGL::Engine::IndexBuffer.new([0, 1, 2, 3, 4, 5])
+
+    assert_nil buffer.get_triangle(-1)
   end
 
   test "each_triangle yields triangles" do

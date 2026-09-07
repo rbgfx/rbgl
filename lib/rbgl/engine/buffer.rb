@@ -6,6 +6,10 @@ module RBGL
       attr_reader :name, :size, :offset, :kind
 
       def initialize(name, size, offset = 0, kind: nil)
+        unless size.is_a?(Integer) && size.positive?
+          raise ArgumentError, "Vertex attribute size must be a positive Integer"
+        end
+
         @name = name.to_sym
         @size = size
         @offset = offset
@@ -238,6 +242,8 @@ module RBGL
       end
 
       def get_triangle(index)
+        return nil unless index.is_a?(Integer) && index >= 0
+
         start = index * 3
         @indices[start, 3]
       end
