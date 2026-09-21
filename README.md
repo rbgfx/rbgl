@@ -136,7 +136,7 @@ window = RBGL::GUI::Window.new(
 )
 ```
 
-Supported formats are `:ppm` and `:bmp`. For PPM, select `ppm_mode: :ascii` or `ppm_mode: :binary`. Set `max_frames: nil` only when an unlimited output sequence is intentional.
+Supported formats are `:ppm`, `:bmp`, and optional `:png`. For PPM, select `ppm_mode: :ascii` or `ppm_mode: :binary`. PNG output requires the `tessel` gem. Set `max_frames: nil` only when an unlimited output sequence is intentional.
 
 ## Examples and development
 
@@ -152,5 +152,5 @@ Use `rbgl doctor` or `rbgl doctor --json` to inspect native backend availability
 ## License
 
 RBGL and the examples distributed in this repository are available under the [MIT License](LICENSE).
-The file backend writes PPM and BMP directly. Install the optional `tessel`
-gem to enable PNG output with `format: :png`.
+The file backend writes PPM and BMP directly, and delegates PNG output to the
+optional `tessel` gem when `format: :png` is selected.
