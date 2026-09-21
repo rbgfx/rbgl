@@ -30,6 +30,17 @@ class CocoaBackendTest < Test::Unit::TestCase
     assert_equal 480, event.height
   end
 
+  test "convert_event preserves scroll, modifier, and focus events" do
+    backend = RBGL::GUI::Cocoa::Backend.allocate
+    scroll = backend.send(:convert_event, type: :scroll, dx: 1.5, dy: -2.0, modifiers: [:shift])
+    click = backend.send(:convert_event, type: :mouse_press, x: 4, y: 5, button: 0, modifiers: [:command])
+
+    assert_equal [1.5, -2.0, [:shift]], [scroll.dx, scroll.dy, scroll.modifiers]
+    assert_equal [:command], click.modifiers
+    assert_equal :focus, backend.send(:convert_event, type: :focus).type
+    assert_equal :blur, backend.send(:convert_event, type: :blur).type
+  end
+
   test "convert_event normalizes Cocoa key codes" do
     backend = RBGL::GUI::Cocoa::Backend.allocate
 

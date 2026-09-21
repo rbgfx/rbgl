@@ -99,7 +99,7 @@ window.on(:resize) do |event|
 end
 ```
 
-Supported portable event types include `:key_press`, `:key_release`, `:mouse_press`, `:mouse_release`, `:mouse_move`, `:resize`, and `:close`.
+Supported portable event types include `:key_press`, `:key_release`, `:mouse_press`, `:mouse_release`, `:mouse_move`, `:scroll`, `:focus`, `:blur`, `:resize`, and `:close`. On Cocoa, key and mouse events include `modifiers`; scroll events provide pixel `dx` and `dy`.
 
 `Window#poll_events_raw` returns these normalized events as hashes when a manual loop is more convenient. Resize events
 update the window, context, and backend dimensions without invoking registered event handlers.

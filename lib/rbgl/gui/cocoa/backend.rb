@@ -77,17 +77,22 @@ module RBGL
 
           case type
           when :key_press
-            Event.new(:key_press, key: normalize_key(raw[:key], raw[:char]), keycode: raw[:key], char: raw[:char])
+            Event.new(:key_press, key: normalize_key(raw[:key], raw[:char]), keycode: raw[:key], char: raw[:char], modifiers: raw[:modifiers] || [])
           when :key_release
-            Event.new(:key_release, key: normalize_key(raw[:key]), keycode: raw[:key])
+            Event.new(:key_release, key: normalize_key(raw[:key]), keycode: raw[:key], modifiers: raw[:modifiers] || [])
           when :mouse_press
-            Event.new(:mouse_press, x: raw[:x], y: raw[:y], button: raw[:button])
+            Event.new(:mouse_press, x: raw[:x], y: raw[:y], button: raw[:button], modifiers: raw[:modifiers] || [])
           when :mouse_release
-            Event.new(:mouse_release, x: raw[:x], y: raw[:y], button: raw[:button])
+            Event.new(:mouse_release, x: raw[:x], y: raw[:y], button: raw[:button], modifiers: raw[:modifiers] || [])
           when :mouse_move
-            Event.new(:mouse_move, x: raw[:x], y: raw[:y])
+            Event.new(:mouse_move, x: raw[:x], y: raw[:y], modifiers: raw[:modifiers] || [])
+          when :scroll
+            Event.new(:scroll, dx: raw[:dx], dy: raw[:dy], modifiers: raw[:modifiers] || [])
+          when :focus, :blur
+            Event.new(type)
           when :resize
-            Event.new(:resize, width: raw[:width], height: raw[:height])
+            Event.new(:resize, width: raw[:width], height: raw[:height],
+                               framebuffer_width: raw[:framebuffer_width], framebuffer_height: raw[:framebuffer_height])
           else
             nil
           end
