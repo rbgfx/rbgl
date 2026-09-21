@@ -22,12 +22,17 @@ module RBGL
           super(width, height, title)
           Metaco.init
           @handle = Metaco.window_create(width, height, title, resizable: resizable, high_dpi: high_dpi)
+          @framebuffer_width, @framebuffer_height = Metaco.framebuffer_size(@handle)
         end
 
         def present(framebuffer)
           return false unless @handle
 
-          Metaco.set_pixels(@handle, framebuffer.to_rgba_bytes, framebuffer.width, framebuffer.height)
+          bytes = framebuffer.to_rgba_bytes
+          width = @framebuffer_width
+          height = @framebuffer_height
+          bytes = scale_pixels(bytes, framebuffer.width, framebuffer.height, width, height) if [width, height] != [framebuffer.width, framebuffer.height]
+          Metaco.set_pixels(@handle, bytes, width, height)
           Metaco.present(@handle)
           true
         end
@@ -56,8 +61,14 @@ module RBGL
           return unless @handle
 
           bytes = validate_rgba_buffer(buffer, width, height)
-          Metaco.set_pixels(@handle, bytes, width, height)
+          bytes = scale_pixels(bytes, width, height, @framebuffer_width, @framebuffer_height) if [width, height] != [@framebuffer_width, @framebuffer_height]
+          Metaco.set_pixels(@handle, bytes, @framebuffer_width, @framebuffer_height)
           Metaco.present(@handle)
+        end
+
+        def resize(width, height)
+          super
+          @framebuffer_width, @framebuffer_height = Metaco.framebuffer_size(@handle)
         end
 
         def metal_available?
@@ -104,6 +115,18 @@ module RBGL
 
         def mouse_y(y)
           @height ? @height - 1 - y : y
+        end
+
+        def scale_pixels(bytes, source_width, source_height, target_width, target_height)
+          scaled = String.new(capacity: target_width * target_height * 4, encoding: Encoding::BINARY)
+          target_height.times do |y|
+            source_y = y * source_height / target_height
+            target_width.times do |x|
+              source_x = x * source_width / target_width
+              scaled << bytes.byteslice(((source_y * source_width) + source_x) * 4, 4)
+            end
+          end
+          scaled
         end
       end
     end
