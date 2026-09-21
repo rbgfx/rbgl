@@ -52,10 +52,17 @@ class FileBackendTest < Test::Unit::TestCase
     assert File.exist?(File.join(@tmpdir, "frame_00000.ppm"))
   end
 
-  test "rejects unsupported formats" do
-    assert_raise(ArgumentError) do
-      RBGL::GUI::FileBackend.new(10, 10, "Test", format: :png, output_dir: @tmpdir)
+  test "writes PNG when tessel is installed" do
+    begin
+      require "tessel"
+    rescue LoadError
+      omit("tessel gem is not installed")
     end
+    backend = RBGL::GUI::FileBackend.new(10, 10, "Test", format: :png, output_dir: @tmpdir)
+
+    backend.present(@fb)
+
+    assert File.exist?(File.join(@tmpdir, "frame_00000.png"))
   end
 
   test "rejects unsupported ppm modes" do

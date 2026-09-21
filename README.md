@@ -152,3 +152,5 @@ Use `rbgl doctor` or `rbgl doctor --json` to inspect native backend availability
 ## License
 
 RBGL and the examples distributed in this repository are available under the [MIT License](LICENSE).
+The file backend writes PPM and BMP directly. Install the optional `tessel`
+gem to enable PNG output with `format: :png`.
