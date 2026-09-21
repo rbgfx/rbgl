@@ -13,7 +13,7 @@ module RBGL
       end
 
       class Backend < GUI::Backend
-        def initialize(width, height, title = "RBGL", env: ENV)
+        def initialize(width, height, title = "RBGL", env: ENV, resizable: false, high_dpi: false, **_options)
           @env = env
           unless METACO_AVAILABLE
             raise LoadError, "metaco gem is required for Cocoa backend. Install it with: gem install metaco"
@@ -21,7 +21,7 @@ module RBGL
 
           super(width, height, title)
           Metaco.init
-          @handle = Metaco.window_create(width, height, title)
+          @handle = Metaco.window_create(width, height, title, resizable: resizable, high_dpi: high_dpi)
         end
 
         def present(framebuffer)
