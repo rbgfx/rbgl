@@ -15,3 +15,5 @@ desc "Run RuboCop correctness checks"
 task :lint do
   sh "bundle exec rubocop --cache false --lint lib rbgl.gemspec Rakefile test/integration"
 end
+
+task verify: %i[lint test]

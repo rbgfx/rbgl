@@ -4,13 +4,13 @@ source "https://rubygems.org"
 
 gemspec
 
+gem "larb", path: "../larb"
+gem "rlsl", path: "../rlsl"
+gem "tessel", path: "../tessel"
+gem "metaco", path: "../metaco" if RUBY_PLATFORM.include?("darwin")
+
 gem "benchmark", "~> 0.5"
 gem "rake"
-gem "rlsl", "~> 1.0"
 gem "rubocop", "~> 1.88"
 gem "test-unit"
 gem "simplecov", require: false
-
-install_if -> { RUBY_PLATFORM.match?(/darwin/) } do
-  gem "metaco"
-end
