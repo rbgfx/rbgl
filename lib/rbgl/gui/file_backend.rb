@@ -4,11 +4,12 @@ require "fileutils"
 require_relative "file_backend/frame_writer"
 require_relative "file_backend/ppm_writer"
 require_relative "file_backend/bmp_writer"
+require_relative "file_backend/png_writer"
 
 module RBGL
   module GUI
     class FileBackend < Backend
-      SUPPORTED_FORMATS = %i[ppm bmp].freeze
+      SUPPORTED_FORMATS = %i[ppm bmp png].freeze
       PPM_MODES = %i[ascii binary].freeze
 
       attr_reader :max_frames, :output_dir

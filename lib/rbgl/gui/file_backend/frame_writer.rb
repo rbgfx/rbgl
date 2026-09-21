@@ -10,6 +10,13 @@ module RBGL
             PpmWriter.new(binary: ppm_mode == :binary)
           when :bmp
             BmpWriter.new
+          when :png
+            begin
+              require "tessel"
+            rescue LoadError
+              raise ArgumentError, "format: :png requires the tessel gem"
+            end
+            PngWriter.new
           else
             raise ArgumentError, "Unsupported file backend format: #{format}"
           end
