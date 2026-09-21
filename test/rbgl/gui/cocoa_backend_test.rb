@@ -41,6 +41,14 @@ class CocoaBackendTest < Test::Unit::TestCase
     assert_equal :blur, backend.send(:convert_event, type: :blur).type
   end
 
+  test "converts Cocoa bottom-left mouse coordinates to portable top-left coordinates" do
+    backend = RBGL::GUI::Cocoa::Backend.allocate
+    backend.instance_variable_set(:@height, 100)
+    event = backend.send(:convert_event, type: :mouse_move, x: 4.0, y: 9.0)
+
+    assert_equal 90.0, event.y
+  end
+
   test "convert_event normalizes Cocoa key codes" do
     backend = RBGL::GUI::Cocoa::Backend.allocate
 

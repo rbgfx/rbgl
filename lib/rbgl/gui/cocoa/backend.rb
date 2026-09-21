@@ -81,11 +81,11 @@ module RBGL
           when :key_release
             Event.new(:key_release, key: normalize_key(raw[:key]), keycode: raw[:key], modifiers: raw[:modifiers] || [])
           when :mouse_press
-            Event.new(:mouse_press, x: raw[:x], y: raw[:y], button: raw[:button], modifiers: raw[:modifiers] || [])
+            Event.new(:mouse_press, x: raw[:x], y: mouse_y(raw[:y]), button: raw[:button], modifiers: raw[:modifiers] || [])
           when :mouse_release
-            Event.new(:mouse_release, x: raw[:x], y: raw[:y], button: raw[:button], modifiers: raw[:modifiers] || [])
+            Event.new(:mouse_release, x: raw[:x], y: mouse_y(raw[:y]), button: raw[:button], modifiers: raw[:modifiers] || [])
           when :mouse_move
-            Event.new(:mouse_move, x: raw[:x], y: raw[:y], modifiers: raw[:modifiers] || [])
+            Event.new(:mouse_move, x: raw[:x], y: mouse_y(raw[:y]), modifiers: raw[:modifiers] || [])
           when :scroll
             Event.new(:scroll, dx: raw[:dx], dy: raw[:dy], modifiers: raw[:modifiers] || [])
           when :focus, :blur
@@ -100,6 +100,10 @@ module RBGL
 
         def normalize_key(key, char = nil)
           KeyMapper.key(key, char)
+        end
+
+        def mouse_y(y)
+          @height ? @height - 1 - y : y
         end
       end
     end
