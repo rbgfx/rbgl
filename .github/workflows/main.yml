@@ -68,7 +68,7 @@ jobs:
           persist-credentials: false
 
       - name: Resolve dependencies for this Ruby version
-        run: rm Gemfile.lock
+        run: rm -f Gemfile.lock
       - name: Set up Ruby
         uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
@@ -129,7 +129,7 @@ jobs:
           persist-credentials: false
 
       - name: Resolve dependencies for this Ruby version
-        run: rm Gemfile.lock
+        run: rm -f Gemfile.lock
       - name: Set up Ruby
         uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
@@ -185,7 +185,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes weston xvfb
       - name: Resolve dependencies for this Ruby version
-        run: rm Gemfile.lock
+        run: rm -f Gemfile.lock
       - name: Set up Ruby
         uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
