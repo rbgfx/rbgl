@@ -16,6 +16,9 @@ concurrency:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: main
     strategy:
       fail-fast: false
       matrix:
@@ -32,13 +35,47 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          path: main
           persist-credentials: false
+      - name: Checkout Larb
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/larb
+          ref: main
+          path: larb
+          persist-credentials: false
+      - name: Checkout RLSL
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/rlsl
+          ref: main
+          path: rlsl
+          persist-credentials: false
+      - name: Checkout Tessel
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/tessel
+          ref: main
+          path: tessel
+          persist-credentials: false
+      - name: Checkout Metaco (macOS only)
+        if: runner.os == 'macOS'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/metaco
+          ref: main
+          path: metaco
+          persist-credentials: false
+
+      - name: Resolve dependencies for this Ruby version
+        run: rm Gemfile.lock
       - name: Set up Ruby
         uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler: default
           bundler-cache: true
+          working-directory: main
       - name: Rebuild CPU-specific dependency
         run: bundle pristine larb
       - name: Run tests
@@ -53,35 +90,109 @@ jobs:
 
   quality:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: main
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          path: main
           persist-credentials: false
+      - name: Checkout Larb
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/larb
+          ref: main
+          path: larb
+          persist-credentials: false
+      - name: Checkout RLSL
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/rlsl
+          ref: main
+          path: rlsl
+          persist-credentials: false
+      - name: Checkout Tessel
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/tessel
+          ref: main
+          path: tessel
+          persist-credentials: false
+      - name: Checkout Metaco (macOS only)
+        if: runner.os == 'macOS'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/metaco
+          ref: main
+          path: metaco
+          persist-credentials: false
+
+      - name: Resolve dependencies for this Ruby version
+        run: rm Gemfile.lock
       - name: Set up Ruby
         uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
           ruby-version: "3.4"
           bundler: default
           bundler-cache: true
+          working-directory: main
       - name: Run correctness lint
         run: bundle exec rake lint
 
   native-backends:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: main
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          path: main
           persist-credentials: false
+      - name: Checkout Larb
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/larb
+          ref: main
+          path: larb
+          persist-credentials: false
+      - name: Checkout RLSL
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/rlsl
+          ref: main
+          path: rlsl
+          persist-credentials: false
+      - name: Checkout Tessel
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/tessel
+          ref: main
+          path: tessel
+          persist-credentials: false
+      - name: Checkout Metaco (macOS only)
+        if: runner.os == 'macOS'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/metaco
+          ref: main
+          path: metaco
+          persist-credentials: false
+
       - name: Install display servers
         run: |
           sudo apt-get update
           sudo apt-get install --yes weston xvfb
+      - name: Resolve dependencies for this Ruby version
+        run: rm Gemfile.lock
       - name: Set up Ruby
         uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
           ruby-version: "3.4"
           bundler: default
           bundler-cache: true
+          working-directory: main
       - name: Rebuild CPU-specific dependency
         run: bundle pristine larb
       - name: Smoke test X11 through Xvfb
