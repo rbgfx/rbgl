@@ -1,6 +1,20 @@
 # RBGL
 
-RBGL (RuBy Graphics Library) is a pure Ruby software renderer with Cocoa, Wayland, X11, and headless file backends.
+> Pure Ruby software rendering with native windows and headless output.
+
+[![Gem version](https://badge.fury.io/rb/rbgl.svg)](https://rubygems.org/gems/rbgl) [![Downloads](https://img.shields.io/gem/dt/rbgl?label=downloads)](https://rubygems.org/gems/rbgl) [![Ruby](https://img.shields.io/badge/ruby-%3E%3D3.1-CC342D?logo=ruby&logoColor=white)](https://www.ruby-lang.org/) [![CI](https://github.com/rbgfx/rbgl/actions/workflows/main.yml/badge.svg)](https://github.com/rbgfx/rbgl/actions/workflows/main.yml) [![License](https://img.shields.io/badge/license-MIT-750014.svg)](LICENSE)
+
+**[Features](#features) · [Requirements](#requirements) · [Installation](#installation) · [Quick start](#quick-start) · [Events](#events) · [File backend](#file-backend) · [License](#license) · [Website](https://rbgfx.github.io/rbgl/)**
+
+---
+
+RBGL is a pure Ruby graphics library with a software renderer and portable native-window and file backends.
+
+## Features
+
+- Ruby-defined vertex and fragment stages with typed vertex layouts.
+- Software rasterization for triangles, lines, and points, with depth and alpha blending.
+- Cocoa, Wayland, X11, and headless file backends.
 
 ## Requirements
 
