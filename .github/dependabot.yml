@@ -1,11 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: bundler
-    directory: /
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
+  # Bundler cannot fetch the sibling path dependencies in this repository.
   - package-ecosystem: github-actions
     directory: /
     schedule:
