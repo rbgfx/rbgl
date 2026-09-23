@@ -1,26 +1,25 @@
-# RBGL
+<h1 align="center">RBGL</h1>
 
-> Pure Ruby software rendering with native windows and headless output.
+<p align="center">A pure Ruby software renderer with Cocoa, Wayland, X11, and headless file backends.</p>
 
-[![Gem version](https://badge.fury.io/rb/rbgl.svg)](https://rubygems.org/gems/rbgl) [![Downloads](https://img.shields.io/gem/dt/rbgl?label=downloads)](https://rubygems.org/gems/rbgl) [![Ruby](https://img.shields.io/badge/ruby-%3E%3D3.1-CC342D?logo=ruby&logoColor=white)](https://www.ruby-lang.org/) [![CI](https://github.com/rbgfx/rbgl/actions/workflows/main.yml/badge.svg)](https://github.com/rbgfx/rbgl/actions/workflows/main.yml) [![License](https://img.shields.io/badge/license-MIT-750014.svg)](LICENSE)
+<p align="center">
+  <a href="https://rubygems.org/gems/rbgl"><img src="https://badge.fury.io/rb/rbgl.svg" alt="Gem Version"></a>
+  <a href="https://rubygems.org/gems/rbgl"><img src="https://img.shields.io/gem/dt/rbgl?label=downloads" alt="Downloads"></a>
+  <a href="https://www.ruby-lang.org/"><img src="https://img.shields.io/badge/ruby-%3E%3D3.1-CC342D?logo=ruby&amp;logoColor=white" alt="Ruby Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-750014.svg" alt="License"></a>
+</p>
 
-**[Features](#features) · [Requirements](#requirements) · [Installation](#installation) · [Quick start](#quick-start) · [Events](#events) · [File backend](#file-backend) · [License](#license) · [Website](https://rbgfx.github.io/rbgl/)**
+[Features](#features) · [Installation](#installation) · [Quick Start](#quick-start) · [Events](#events) · [File Backend](#file-backend)
 
----
+***
 
-RBGL is a pure Ruby graphics library with a software renderer and portable native-window and file backends.
+RBGL (Ruby Graphics Library) is a pure Ruby software renderer with Cocoa, Wayland, X11, and headless file backends.
 
 ## Features
 
 - Ruby-defined vertex and fragment stages with typed vertex layouts.
 - Software rasterization for triangles, lines, and points, with depth and alpha blending.
 - Cocoa, Wayland, X11, and headless file backends.
-
-## Requirements
-
-- Ruby 3.1 or newer
-- macOS: the `metaco` gem for Cocoa windows
-- Linux: a Wayland compositor or X11 server
 
 ## Installation
 
@@ -32,7 +31,13 @@ gem "rbgl"
 
 Then run `bundle install`, or install it directly with `gem install rbgl`.
 
-## Quick start
+### Requirements
+
+- Ruby 3.1 or newer
+- macOS: the `metaco` gem for Cocoa windows
+- Linux: a Wayland compositor or X11 server
+
+## Quick Start
 
 This complete example renders one triangle to `frames/frame_00000.ppm`. The file backend is useful for CI, image generation, and environments without a display server.
 
@@ -162,6 +167,10 @@ Supported formats are `:ppm`, `:bmp`, and optional `:png`. For PPM, select `ppm_
 - `RBGL_BENCH_ITERATIONS=10 bundle exec ruby bench/renderer_bench.rb` runs renderer benchmarks.
 
 Use `rbgl doctor` or `rbgl doctor --json` to inspect native backend availability.
+
+## Contributing
+
+Bug reports and pull requests are welcome at [rbgfx/rbgl](https://github.com/rbgfx/rbgl).
 
 ## License
 
