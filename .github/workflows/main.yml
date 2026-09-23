@@ -1,10 +1,17 @@
-name: CI
+name: Ruby
 
 on:
   push:
     branches:
       - main
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -23,18 +30,21 @@ jobs:
           - "4.0"
           - "head"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
           ruby-version: ${{ matrix.ruby }}
+          bundler: default
           bundler-cache: true
       - name: Rebuild CPU-specific dependency
         run: bundle pristine larb
       - name: Run tests
         run: bundle exec rake test
       - name: Run packaging smoke test
-        run: |
+        run: | # zizmor: ignore[adhoc-packages]
           gem build rbgl.gemspec
           gem install rbgl-*.gem
           ruby -e 'require "rbgl"; puts RBGL::VERSION'
@@ -44,11 +54,14 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
           ruby-version: "3.4"
+          bundler: default
           bundler-cache: true
       - name: Run correctness lint
         run: bundle exec rake lint
@@ -56,15 +69,18 @@ jobs:
   native-backends:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install display servers
         run: |
           sudo apt-get update
           sudo apt-get install --yes weston xvfb
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
           ruby-version: "3.4"
+          bundler: default
           bundler-cache: true
       - name: Rebuild CPU-specific dependency
         run: bundle pristine larb
@@ -85,3 +101,18 @@ jobs:
           done
           test -S "$runtime_dir/$WAYLAND_DISPLAY"
           RBGL_SMOKE_BACKEND=wayland bundle exec ruby test/integration/native_backend_smoke.rb
+
+  package:
+    name: Strict gem build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
+        with:
+          ruby-version: '4.0'
+          bundler: default
+      - name: Build with strict gem validation
+        run: gem build --strict "$(find . -maxdepth 1 -name '*.gemspec' -print -quit)"
