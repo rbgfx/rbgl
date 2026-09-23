@@ -1,6 +1,11 @@
 version: 2
 updates:
-  # Bundler updates cannot resolve the sibling path gems in the isolated updater.
+  - package-ecosystem: bundler
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: github-actions
     directory: /
     schedule:
