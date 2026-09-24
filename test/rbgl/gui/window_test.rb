@@ -389,6 +389,33 @@ class WindowRunTest < Test::Unit::TestCase
     assert_true backend.closed
   end
 
+  test "step advances one frame using the supplied monotonic time" do
+    backend = MockLoopBackend.new(100, 100, max_frames: 3)
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend:, target_fps: nil)
+    deltas = []
+
+    assert_true window.step(1.0) { |_ctx, delta| deltas << delta }
+    assert_true window.step(1.04) { |_ctx, delta| deltas << delta }
+    assert_equal 2, backend.present_count
+    assert_equal 0.0, deltas.first
+    assert_in_delta 0.04, deltas.last, 0.0001
+    assert_in_delta 25.0, window.fps, 0.001
+    window.stop
+    assert_false window.step(1.08)
+    window.close
+    assert_true backend.closed
+  end
+
+  test "step stops when the backend requests close" do
+    backend = MockLoopBackend.new(100, 100, max_frames: 1)
+    window = RBGL::GUI::Window.new(width: 100, height: 100, backend:, target_fps: nil)
+
+    assert_true window.step(1.0)
+    assert_false window.step(1.02)
+    assert_equal 1, backend.present_count
+    window.close
+  end
+
   test "run closes backend when frame callback raises" do
     backend = MockLoopBackend.new(100, 100, max_frames: 10)
     window = RBGL::GUI::Window.new(

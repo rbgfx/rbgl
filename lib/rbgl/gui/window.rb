@@ -47,6 +47,19 @@ module RBGL
         end
       end
 
+      # Advances one frame. `now` is seconds on a monotonic timeline.
+      def step(now = nil, &frame_callback)
+        return false if @closed
+
+        !!@render_loop.step(
+          backend: @backend,
+          context: @context,
+          process_events: method(:process_events),
+          now:,
+          &frame_callback
+        )
+      end
+
       def stop
         @render_loop.stop
       end

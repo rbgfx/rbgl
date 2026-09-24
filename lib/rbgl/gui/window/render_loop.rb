@@ -21,27 +21,42 @@ module RBGL
         end
 
         def run(backend:, context:, process_events:, &frame_callback)
-          @running = true
-          last_time = @time_source.call
-          next_frame_deadline = @frame_interval && (last_time + @frame_interval)
-          @frame_times.clear
+          start
 
           while @running && !backend.should_close?
-            frame_started_at = @time_source.call
-            delta_time = frame_started_at - last_time
-            last_time = frame_started_at
+            frame_finished_at = step(backend:, context:, process_events:, &frame_callback)
+            break unless frame_finished_at
 
-            process_events.call
-            break if stop_requested?(backend)
-            frame_callback&.call(context, delta_time)
-            break if stop_requested?(backend)
-            record_present_result(backend.present(context.framebuffer))
-
-            frame_finished_at = @time_source.call
-            record_frame(frame_finished_at)
-            throttle(next_frame_deadline, frame_finished_at)
-            next_frame_deadline = advance_deadline(next_frame_deadline, frame_finished_at)
+            throttle(@next_frame_deadline, frame_finished_at)
+            @next_frame_deadline = advance_deadline(@next_frame_deadline, frame_finished_at)
           end
+        end
+
+        def start(now: nil)
+          @running = true
+          @last_time = now.nil? ? @time_source.call : Float(now)
+          @next_frame_deadline = @frame_interval && (@last_time + @frame_interval)
+          @frame_times.clear
+        end
+
+        def step(backend:, context:, process_events:, now: nil, &frame_callback)
+          start(now:) if @last_time.nil?
+          return false unless @running
+          return false if backend.should_close?
+
+          frame_started_at = now.nil? ? @time_source.call : Float(now)
+          delta_time = frame_started_at - @last_time
+          @last_time = frame_started_at
+
+          process_events.call
+          return false if stop_requested?(backend)
+          frame_callback&.call(context, delta_time)
+          return false if stop_requested?(backend)
+
+          record_present_result(backend.present(context.framebuffer))
+          @last_frame_finished_at = now.nil? ? @time_source.call : frame_started_at
+          record_frame(@last_frame_finished_at)
+          @last_frame_finished_at
         end
 
         def record_present_result(result)
