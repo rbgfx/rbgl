@@ -5,8 +5,8 @@
 - Add PNG output and frame-limited file rendering.
 - Add a non-blocking window frame step API.
 - Fixed perspective depth interpolation, shared-edge coverage, NPOT mipmaps, repeat filtering, and shader numeric edge cases.
-- Fixed native window resize, close, and Wayland disconnect handling, including internal size synchronization during raw event polling.
-- Tightened vertex layout, index, draw-range, and texture data mutation contracts, and skipped unnecessary clipping and expired frame deadlines.
+- Fix native window resize, close, and Wayland disconnect handling.
+- Reject invalid vertex layouts, draw ranges, and texture mutations earlier.
 
 ## 1.0.0 - 2026-04-05
 
