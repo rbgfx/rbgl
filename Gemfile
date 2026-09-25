@@ -4,10 +4,8 @@ source "https://rubygems.org"
 
 gemspec
 
-gem "larb", path: "../larb"
-gem "rlsl", path: "../rlsl"
-gem "tessel", path: "../tessel"
-gem "metaco", path: "../metaco" if RUBY_PLATFORM.include?("darwin")
+gem "tessel"
+gem "metaco" if RUBY_PLATFORM.include?("darwin")
 
 gem "benchmark", "~> 0.5"
 gem "rake"
