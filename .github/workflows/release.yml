@@ -20,12 +20,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Checkout larb
+      - name: Checkout tessel
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: rbgfx/larb
+          repository: rbgfx/tessel
           ref: main
-          path: larb
+          path: tessel
           persist-credentials: false
       - name: Checkout rlsl
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,18 +34,10 @@ jobs:
           ref: main
           path: rlsl
           persist-credentials: false
-      - name: Checkout tessel
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/tessel
-          ref: main
-          path: tessel
-          persist-credentials: false
       - name: Link local dependencies
         run: |
-          ln -s "$GITHUB_WORKSPACE/larb" "$GITHUB_WORKSPACE/../larb"
-          ln -s "$GITHUB_WORKSPACE/rlsl" "$GITHUB_WORKSPACE/../rlsl"
           ln -s "$GITHUB_WORKSPACE/tessel" "$GITHUB_WORKSPACE/../tessel"
+          ln -s "$GITHUB_WORKSPACE/rlsl" "$GITHUB_WORKSPACE/../rlsl"
       - name: Set up Ruby
         uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
@@ -56,10 +48,6 @@ jobs:
         run: |
           version="$(ruby -e 'print Gem::Specification.load(Dir.glob("*.gemspec").fetch(0)).version')"
           test "$GITHUB_REF_NAME" = "v$version"
-      - name: Build Larb extension
-        run: gem install rake-compiler --no-document && rake compile # zizmor: ignore[adhoc-packages]
-        working-directory: larb
-
       - name: Test and build
         run: |
           bundle exec rake

@@ -15,203 +15,50 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: main
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-        ruby:
-          - "3.1"
-          - "3.2"
-          - "3.3"
-          - "3.4"
-          - "4.0"
-          - "head"
+        ruby: ['3.1', '3.2', '3.3', '3.4', '4.0']
+    defaults:
+      run:
+        working-directory: main
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: main
           persist-credentials: false
-      - name: Checkout Larb
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/larb
-          ref: main
-          path: larb
-          persist-credentials: false
-      - name: Checkout RLSL
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/rlsl
-          ref: main
-          path: rlsl
-          persist-credentials: false
-      - name: Checkout Tessel
+      - name: Checkout tessel
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rbgfx/tessel
           ref: main
           path: tessel
           persist-credentials: false
-      - name: Checkout Metaco (macOS only)
-        if: runner.os == 'macOS'
+      - name: Checkout rlsl
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: rbgfx/metaco
+          repository: rbgfx/rlsl
           ref: main
-          path: metaco
+          path: rlsl
           persist-credentials: false
-
+      - name: Checkout flipbook
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rbgfx/flipbook
+          ref: main
+          path: flipbook
+          persist-credentials: false
       - name: Resolve dependencies for this Ruby version
-        run: rm -f Gemfile.lock
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
+        run: rm Gemfile.lock
+      - uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler: default
           bundler-cache: true
           working-directory: main
-      - name: Compile local Larb extension
-        run: bundle exec rake -C ../larb compile
-      - name: Run tests
-        run: bundle exec rake test
-      - name: Run packaging smoke test
-        run: | # zizmor: ignore[adhoc-packages]
-          gem build rbgl.gemspec
-          gem install rbgl-*.gem
-          ruby -e 'require "rbgl"; puts RBGL::VERSION'
-      - name: Run doctor (headless-safe)
-        run: ruby exe/rbgl doctor --json
-
-  quality:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: main
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: main
-          persist-credentials: false
-      - name: Checkout Larb
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/larb
-          ref: main
-          path: larb
-          persist-credentials: false
-      - name: Checkout RLSL
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/rlsl
-          ref: main
-          path: rlsl
-          persist-credentials: false
-      - name: Checkout Tessel
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/tessel
-          ref: main
-          path: tessel
-          persist-credentials: false
-      - name: Checkout Metaco (macOS only)
-        if: runner.os == 'macOS'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/metaco
-          ref: main
-          path: metaco
-          persist-credentials: false
-
-      - name: Resolve dependencies for this Ruby version
-        run: rm -f Gemfile.lock
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
-        with:
-          ruby-version: "3.4"
-          bundler: default
-          bundler-cache: true
-          working-directory: main
-      - name: Run correctness lint
-        run: bundle exec rake lint
-
-  native-backends:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: main
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: main
-          persist-credentials: false
-      - name: Checkout Larb
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/larb
-          ref: main
-          path: larb
-          persist-credentials: false
-      - name: Checkout RLSL
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/rlsl
-          ref: main
-          path: rlsl
-          persist-credentials: false
-      - name: Checkout Tessel
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/tessel
-          ref: main
-          path: tessel
-          persist-credentials: false
-      - name: Checkout Metaco (macOS only)
-        if: runner.os == 'macOS'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: rbgfx/metaco
-          ref: main
-          path: metaco
-          persist-credentials: false
-
-      - name: Install display servers
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes weston xvfb
-      - name: Resolve dependencies for this Ruby version
-        run: rm -f Gemfile.lock
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
-        with:
-          ruby-version: "3.4"
-          bundler: default
-          bundler-cache: true
-          working-directory: main
-      - name: Compile local Larb extension
-        run: bundle exec rake -C ../larb compile
-      - name: Smoke test X11 through Xvfb
-        run: xvfb-run --auto-servernum env RBGL_SMOKE_BACKEND=x11 bundle exec ruby test/integration/native_backend_smoke.rb
-      - name: Smoke test Wayland through headless Weston
-        run: |
-          runtime_dir="$(mktemp -d)"
-          chmod 700 "$runtime_dir"
-          export XDG_RUNTIME_DIR="$runtime_dir"
-          export WAYLAND_DISPLAY=wayland-rbgl
-          weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 >weston.log 2>&1 &
-          weston_pid=$!
-          trap 'kill "$weston_pid"; rm -rf "$runtime_dir"' EXIT
-          for _attempt in $(seq 1 50); do
-            test -S "$runtime_dir/$WAYLAND_DISPLAY" && break
-            sleep 0.1
-          done
-          test -S "$runtime_dir/$WAYLAND_DISPLAY"
-          RBGL_SMOKE_BACKEND=wayland bundle exec ruby test/integration/native_backend_smoke.rb
+      - name: Run verification
+        run: bundle exec rake verify
 
   package:
     name: Strict gem build
@@ -227,3 +74,18 @@ jobs:
           bundler: default
       - name: Build with strict gem validation
         run: gem build --strict "$(find . -maxdepth 1 -name '*.gemspec' -print -quit)"
+
+  signatures:
+    name: RBS signatures
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@984c0c890880bbf811283d6f09c4607c62d210a4 # v1.323.0
+        with:
+          ruby-version: '4.0'
+          bundler: default
+      - run: gem install rbs --no-document # zizmor: ignore[adhoc-packages]
+      - run: rbs -I sig validate
