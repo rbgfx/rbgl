@@ -20,7 +20,12 @@ module RBGL
       def serialize(value)
         values = extract_values(value)
         validate_value_size!(values)
-        values.first(@size).map { |component| Float(component) }
+        values.first(@size).map do |component|
+          number = Float(component)
+          raise ArgumentError, "non-finite component" unless number.finite?
+
+          number
+        end
       rescue ArgumentError, TypeError => e
         raise ArgumentError, "Invalid value for attribute #{name}: #{e.message}"
       end

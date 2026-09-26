@@ -175,6 +175,19 @@ class VertexBufferTest < Test::Unit::TestCase
     assert_equal 2.0, buffer.get_vertex(0)[:weight]
   end
 
+  test "rejects non-finite vertex components without changing the buffer" do
+    buffer = RBGL::Engine::VertexBuffer.new(@layout)
+
+    [Float::NAN, Float::INFINITY, -Float::INFINITY].each do |value|
+      assert_raise(ArgumentError) do
+        buffer.add_vertex(position: [value, 0, 0], color: [1, 1, 1, 1])
+      end
+    end
+
+    assert_equal 0, buffer.vertex_count
+    assert_equal [], buffer.data
+  end
+
   test "restores array attributes larger than vec4" do
     layout = RBGL::Engine::VertexLayout.new do
       attribute :weights, 5
