@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2 - 2026-09-26
+
+- Reject non-finite vertex components and invalid depth buffer values before rendering.
+
 ## 1.0.1 - 2026-09-25
 
 - Add PNG output and frame-limited file rendering.
