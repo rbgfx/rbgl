@@ -241,6 +241,18 @@ class FramebufferTest < Test::Unit::TestCase
     assert_equal 1.0, @fb.get_depth(0, 0)
   end
 
+  test "rejects NaN depth values before they poison drawing" do
+    red = Larb::Color.new(1.0, 0.0, 0.0, 1.0)
+
+    assert_raise(ArgumentError) { @fb.set_depth(0, 0, Float::NAN) }
+    assert_raise(ArgumentError) { @fb.clear_depth(Float::NAN) }
+    assert_raise(ArgumentError) { @fb.clear(color: red, depth: Float::NAN) }
+
+    assert_equal Float::INFINITY, @fb.get_depth(0, 0)
+    assert_equal Larb::Color.black, @fb.get_pixel(0, 0)
+    assert_true @fb.write_pixel(0, 0, red, 0.5)
+  end
+
   test "to_ppm generates valid PPM header" do
     ppm = @fb.to_ppm
     lines = ppm.lines

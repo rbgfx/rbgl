@@ -55,6 +55,7 @@ module RBGL
       def set_depth(x, y, depth)
         return if x < 0 || x >= @width || y < 0 || y >= @height
 
+        validate_depth!(depth)
         @depth_buffer[(y * @width) + x] = depth
       end
 
@@ -71,6 +72,7 @@ module RBGL
       end
 
       def clear(color: Larb::Color.black, depth: Float::INFINITY)
+        validate_depth!(depth)
         @pixels.fill(pack_color(color))
         @depth_buffer.fill(depth)
       end
@@ -80,6 +82,7 @@ module RBGL
       end
 
       def clear_depth(depth = Float::INFINITY)
+        validate_depth!(depth)
         @depth_buffer.fill(depth)
       end
 
@@ -112,6 +115,12 @@ module RBGL
       end
 
       private
+
+      def validate_depth!(depth)
+        return if depth.is_a?(Numeric) && depth.real? && (depth.finite? || depth == Float::INFINITY)
+
+        raise ArgumentError, "Depth must be finite or positive infinity"
+      end
 
       def validate_dimensions!(width, height)
         return if width.is_a?(Integer) && width.positive? && height.is_a?(Integer) && height.positive?
